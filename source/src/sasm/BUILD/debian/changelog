@@ -1,0 +1,11 @@
+sasm (3.16.0-1) stable; urgency=low
+
+  * version number update by debtransform
+
+ -- debtransform <build@opensuse.org>  Sun, 08 Feb 2026 17:56:23 +0000
+
+sasm (3.16.0) stable; urgency=low
+
+  * Update - 3.16.0 version - Japanese language added (thanks ookatuk), Nix flake added (thanks SpeakingPNG), disappearing compiler output widget fixed, debugging infinite waiting fixed, incorrect mapping between addresses and line numbers causing problems in debugging fixed, code editor scrolling while debugging fixed.
+
+ -- Dman95 <Dman1095@gmail.com>  Sun, 08 Feb 2026 20:26:00 +0300

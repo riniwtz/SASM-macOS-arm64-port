@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Our generated macOS build
+source/src/sasm/BUILD/build-macos/
+
+# Icon copied into upstream source during build
+source/src/sasm/BUILD/sasm.icns
+
+# Distribution artifacts
+dist/
+*.zip
+
+# Temporary iconsets
+*.iconset/

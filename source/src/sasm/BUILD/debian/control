@@ -1,0 +1,15 @@
+Source: sasm
+Standards-Version: 3.9.4
+Section: contrib/devel
+Priority: extra
+Maintainer: Dmitriy Manushin <Dman1095@gmail.com>
+Build-Depends: qtbase5-dev, qtchooser, qt5-qmake, qtbase5-dev-tools, debhelper (>= 4.1.16)
+Homepage: http://dman95.github.io/SASM/
+#Vcs-Git: git://git.debian.org/collab-maint/sasm.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/sasm.git;a=summary
+
+Package: sasm
+Architecture: any
+Depends: gcc-multilib, gdb, nasm, ${shlibs:Depends}, ${misc:Depends}
+Description: Simple IDE for NASM, MASM, GAS, FASM assembly languages
+ Simple crossplatform IDE for NASM, MASM, GAS, FASM assembly languages

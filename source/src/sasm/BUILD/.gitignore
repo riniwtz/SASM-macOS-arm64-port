@@ -1,0 +1,27 @@
+# Qt #
+######################
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+qrc_*.cpp
+Makefile
+*-build-*
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+doc/*
+.qmake.stash
+sasm.app
+
+*.o
+sasm
+ui_settings.h
+moc_predefs.h
