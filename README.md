@@ -44,6 +44,7 @@ under the GNU General Public License v3.0 or later.
     <li><a href="#about-the-project">About The Project</a></li>
     <li><a href="#project-structure">Project Structure</a></li>
     <li><a href="#built-with">Built With</a></li>
+    <li><a href="#download-and-install">Download and Install</a></li>
     <li>
       <a href="#getting-started">Getting Started</a>
       <ul>
@@ -169,6 +170,33 @@ The `build-macos/` and `dist/` directories contain generated output and should n
 - **macdeployqt**
 - **macOS codesign**
 - **Shell scripts**
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## Download and Install
+
+If you only want to use SASM, download the latest prebuilt application:
+
+**[Download SASM 3.16.0 for macOS ARM64](https://github.com/riniwtz/SASM-macOS-arm64-port/releases/latest/download/SASM-3.16.0-macOS-arm64.zip)**
+
+1. Download the ZIP file.
+2. Double-click it to extract `sasm.app`.
+3. Drag `sasm.app` to your `Applications` folder.
+4. The build is ad-hoc signed but not notarized. On first launch, Control-click
+   `sasm.app` and choose **Open**, or allow it under **System Settings → Privacy
+   & Security → Open Anyway**.
+5. To build and run the included Intel x86-64 examples, install Rosetta when
+   macOS prompts, or run:
+
+   ```sh
+   softwareupdate --install-rosetta
+   ```
+
+The application runs natively on Apple Silicon. Assembly programs target Intel
+x86-64 and require Rosetta 2. NASM is not bundled; install it with
+`brew install nasm`, or configure an explicit assembler path in SASM's settings.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -592,16 +620,16 @@ dist/SASM-3.16.0-macOS-arm64.zip
 Create a release tag:
 
 ```sh
-git tag -a v3.16.0-macos.1 \
+git tag -a v3.16.0-macos.2 \
     -m "SASM 3.16.0 macOS ARM64 release"
 
-git push origin v3.16.0-macos.1
+git push origin v3.16.0-macos.2
 ```
 
 Create the GitHub Release using GitHub CLI:
 
 ```sh
-gh release create v3.16.0-macos.1 \
+gh release create v3.16.0-macos.2 \
     dist/SASM-3.16.0-macOS-arm64.zip \
     --title "SASM 3.16.0 macOS ARM64 Port" \
     --notes "Unofficial macOS ARM64 port of SASM 3.16.0."
