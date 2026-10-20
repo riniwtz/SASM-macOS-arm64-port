@@ -14,6 +14,10 @@ cp "$ROOT_DIR/assets/sasm.icns" "$SOURCE_DIR/sasm.icns"
 
 mkdir -p "$BUILD_DIR"
 
+# qmake's Info.plist rule has no prerequisites, so remove the generated copy to
+# ensure bundle metadata always reflects the current Info.plist template.
+rm -f "$BUILD_DIR/sasm.app/Contents/Info.plist"
+
 cd "$BUILD_DIR"
 
 "$QMAKE" ../SASM.pro
