@@ -50,7 +50,11 @@ DebugAnyCommandWidget::DebugAnyCommandWidget(QWidget *parent) :
 {
     currentCommandPos = -1;
 
+#ifdef Q_OS_MACOS
+    anyCommandLabel = new QLabel(tr("LLDB command:"));
+#else
     anyCommandLabel = new QLabel(tr("GDB command:"));
+#endif
     command = new QLineEdit;
     performButton = new QPushButton(tr("Perform"));
     printCheckBox = new QCheckBox(tr("Print"));

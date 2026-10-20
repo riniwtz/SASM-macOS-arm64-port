@@ -3,6 +3,8 @@
 
 # Our generated macOS build
 source/src/sasm/BUILD/build-macos/
+source/src/sasm/BUILD/build-macos-tests/
+__pycache__/
 
 # Icon copied into upstream source during build
 source/src/sasm/BUILD/sasm.icns

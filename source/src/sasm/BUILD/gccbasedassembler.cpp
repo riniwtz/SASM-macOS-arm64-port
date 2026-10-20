@@ -4,7 +4,7 @@
 #include <QProcessEnvironment>
 #include <QStringList>
 
-#ifndef Q_OS_WIN32
+#if !defined(Q_OS_WIN32) && !defined(Q_OS_MACOS)
 namespace
 {
    bool testPieOnUnix()
@@ -27,7 +27,7 @@ GccBasedAssembler::GccBasedAssembler(bool x86, QObject *parent)
     : Assembler(x86, parent)
     , m_isPieEnabled(false)
 {
-#ifndef Q_OS_WIN32
+#if !defined(Q_OS_WIN32) && !defined(Q_OS_MACOS)
     m_isPieEnabled = testPieOnUnix();
 #endif
 
@@ -41,6 +41,8 @@ QString GccBasedAssembler::getLinkerPath()
         return Common::applicationDataPath() + "/MinGW/bin/gcc.exe";
     else
         return Common::applicationDataPath() + "/MinGW64/bin/gcc.exe";
+#elif defined(Q_OS_MACOS)
+    return "/usr/bin/clang";
 #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
     return "/usr/bin/cc";
 #else
@@ -50,6 +52,9 @@ QString GccBasedAssembler::getLinkerPath()
 
 QString GccBasedAssembler::getLinkerOptions()
 {
+#ifdef Q_OS_MACOS
+    return "-arch x86_64 $PROGRAM.OBJ$ $MACRO.OBJ$ -g -o $PROGRAM$";
+#endif
     QString options;
     if (isx86())
         #ifdef Q_OS_WIN32
@@ -67,4 +72,3 @@ QString GccBasedAssembler::getLinkerOptions()
         options += " -no-pie";
     return options;
 }
-

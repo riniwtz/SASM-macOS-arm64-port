@@ -56,7 +56,7 @@ under the GNU General Public License v3.0 or later.
     <li><a href="#package">Package</a></li>
     <li><a href="#macos-specific-changes">macOS-Specific Changes</a></li>
     <li><a href="#running-nasm-code-on-macos">Running NASM Code on macOS</a></li>
-    <li><a href="#optional-gdb-debugging">Optional: GDB Debugging</a></li>
+    <li><a href="#debugging-with-lldb">Debugging with LLDB</a></li>
     <li><a href="#releases">Releases</a></li>
     <li><a href="#status">Status</a></li>
     <li><a href="#contributing">Contributing</a></li>
@@ -90,6 +90,10 @@ The goal is not to turn SASM into a separate product, but to make the upstream s
 - Ad-hoc macOS code signing after deployment
 - Reproducible build, deploy, and package scripts
 - ZIP release packaging suitable for GitHub Releases
+- Bundled SASM includes, I/O helper source, keyboard shortcuts, and macOS examples
+- Finder-compatible Homebrew NASM discovery
+- Mach-O x86-64 NASM and Clang defaults, with migration of older Linux settings
+- LLDB debugging through Apple Command Line Tools
 - Preserved upstream SASM source and licensing information
 
 ### Tested environment
@@ -98,10 +102,11 @@ This port has been tested with:
 
 - **SASM:** 3.16.0
 - **Architecture:** Apple Silicon ARM64
-- **macOS:** 26.5
-- **Qt:** Qt 5
+- **macOS:** 27.0 (Apple Silicon)
+- **Qt:** Qt 5.15.19
 - **Build system:** qmake + make
-- **Assembler:** NASM
+- **Assembler:** NASM 3.02
+- **Intel execution:** Rosetta 2
 - **Linker:** Apple Clang
 - **Deployment:** macdeployqt
 - **Signing:** ad-hoc `codesign`
@@ -247,7 +252,7 @@ source/src/sasm/BUILD/build-macos/sasm.app
 The build script:
 
 1. Copies the canonical macOS icon from `assets/sasm.icns`
-2. Creates a clean macOS build directory
+2. Creates a separate, incremental macOS build directory
 3. Runs Qt 5 `qmake`
 4. Compiles SASM with `make`
 
@@ -430,7 +435,7 @@ macOS uses the Mach-O object format instead.
 For x86-64 NASM source intended to link through Apple Clang, assemble using:
 
 ```sh
-nasm -f macho64 program.asm -o program.o
+nasm -f macho64 --pragma "macho build_version macos,11,0" program.asm -o program.o
 ```
 
 Then link:
@@ -456,7 +461,7 @@ _main:
 Build it with:
 
 ```sh
-nasm -f macho64 program.asm -o program.o
+nasm -f macho64 --pragma "macho build_version macos,11,0" program.asm -o program.o
 clang -arch x86_64 program.o -o program
 ```
 
@@ -473,34 +478,96 @@ Expected result:
 42
 ```
 
-SASM's assembler and linker settings may need to be configured accordingly when writing x86-64 assembly on Apple Silicon.
+SASM now configures these tools automatically. New installations use NASM, x64,
+Mach-O objects with DWARF information and macOS platform metadata, and
+`/usr/bin/clang -arch x86_64`. The platform metadata prevents Apple's linker
+from warning that the object has no platform load command.
+SASM searches PATH and the Homebrew locations `/opt/homebrew/bin` and
+`/usr/local/bin`, including when launched from Finder. Explicit paths in Settings
+continue to take precedence.
+
+SASM supports `main`, `CMAIN`, and `_main` through its bundled `macos.inc`
+preinclude. The `io64.inc` library supports macOS C symbol names, relative
+addressing, and the SysV variadic calling convention. Use `io64.inc` for 64-bit
+programs; `io.inc` remains the upstream 32-bit library.
+
+For a first test, open the bundled `Projects/Hello.asm` or `Projects/Sum.asm`
+under `sasm.app/Contents/Resources/sasm`. For Sum, enter `20 22` in the Input
+pane, then Build and Run. The expected output is `42`. Bundled examples open
+as unsaved templates, so editing or building them does not modify the signed app.
+Save a copy in your Documents folder to keep your changes.
+
+On the first launch of this version, SASM replaces saved Linux/32-bit build
+options with macOS defaults. The previous toolchain settings are retained under
+`macos/previous` in SASM's preferences. Custom Mach-O settings are preserved.
+
+The GAS option uses Apple's Clang assembler in x86-64 AT&T syntax. Use `_main`
+for its entry point. FASM, MASM, and 32-bit mode are unavailable in this macOS
+build. Linux system calls, ELF-specific directives, and Windows APIs need source
+changes; changing the object format alone cannot port those programs.
 
 > [!NOTE]
 > The SASM application itself is built as native ARM64.
 >
-> Programs assembled as x86-64 are a separate architecture concern and may require Rosetta to execute on Apple Silicon.
+> NASM generates Intel x86-64 code, not ARM64 code. Running or debugging that
+> code on Apple Silicon requires Apple's Intel translation support. If execution
+> reports “Bad CPU type in executable”, enable/install Rosetta as described by
+> [Apple](https://support.apple.com/102527). SASM does not install it automatically.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
-## Optional: GDB Debugging
+## Debugging with LLDB
 
-SASM's graphical debugging functionality expects GDB.
+The macOS build uses the LLDB supplied with Apple's Command Line Tools (`xcrun
+lldb`). GDB and GDB signing certificates are not required. Debug, Continue/Pause,
+Step Into, Step Over, source breakpoints, register inspection, and typed memory
+watches use this backend. The debugger command field accepts LLDB commands;
+`p expression` is also accepted.
 
-GDB is **not required** to build, launch, or use SASM as an editor and assembler frontend.
+Debugging uses DWARF line information. NASM macros may span several instructions,
+so instruction stepping can remain on the same source line. The backend does not
+insert frame-pointer instructions into your code. macOS may request developer
+tool permission when starting a debugger.
 
-Install GDB with Homebrew:
+Implementation references: [NASM Mach-O support](https://www.nasm.us/doc/nasm09.html)
+and the [LLDB Python API](https://lldb.llvm.org/python_api.html).
+
+## Verification
+
+Run the app integration tests with:
 
 ```sh
-brew install gdb
+./scripts/test.sh
 ```
 
-Modern macOS requires additional code-signing configuration before GDB can debug other processes.
+The tests use isolated preferences and temporary directories, including paths
+with spaces, and a Finder-like PATH without Homebrew. They cover new documents,
+NASM and GAS builds, bundled I/O examples, settings migration, missing tools,
+syntax errors, object-only builds, and the actual Build/Run actions with Hello
+and Sum programs. Runtime tests explicitly skip when Intel
+execution is unavailable. To require runtime tests to pass:
 
-GDB signing is intentionally treated as a machine-specific setup step.
+```sh
+SASM_REQUIRE_EXECUTION=1 ./scripts/test.sh
+```
 
-Private signing certificates and private keys should **not** be stored or distributed with this repository.
+Test the LLDB transport (requires permission to launch debuggee processes):
+
+```sh
+python3 scripts/test-debugger.py
+# Also exercise Intel debugging when translation support is available:
+python3 scripts/test-debugger.py --intel --nasm
+```
+
+The Intel debugger tests also exercise a NASM program with `io64.inc`, including
+source breakpoints, instruction stepping, registers, memory, and input/output.
+Source paths are matched to the debug information so macOS symlinks such as
+`/var` and `/private/var` do not prevent breakpoints from resolving.
+
+To use a non-Homebrew Qt 5.15 installation, set `QMAKE=/path/to/qmake` for the
+build/test scripts and `QT_BIN=/path/to/qt/bin` for deployment.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -558,6 +625,15 @@ The current port includes:
 - [x] Reproducible build script
 - [x] Deployment and code-signing script
 - [x] ZIP release packaging
+- [x] Bundled runtime support files and macOS examples
+- [x] Mach-O NASM and GAS build defaults
+- [x] Homebrew tool discovery from Finder
+- [x] LLDB debugger backend
+- [x] Finder document opening and safe example templates
+
+The IDE runs natively on Apple Silicon; assembly programs use the x86-64 macOS
+ABI. Intel runtime availability is a separate system requirement. See the test
+commands above for checks on your machine.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

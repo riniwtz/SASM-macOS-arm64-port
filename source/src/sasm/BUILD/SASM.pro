@@ -5,6 +5,7 @@
 #-------------------------------------------------
 
 QT       += core gui
+CONFIG += c++11
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -29,7 +30,7 @@ bsd {
     docfiles.files += BSD/share/doc/sasm/changelog.gz
     docfiles.files += BSD/share/doc/sasm/copyright
     docfiles.path = $$DATADIR/doc/sasm/
-} else {
+} else:!macx {
     binfile.files += sasm
     binfile.files += Linux/bin/*
     binfile.path = $$BINDIR
@@ -104,8 +105,24 @@ win32 {
 }
 
 macx {
+ QMAKE_MACOSX_DEPLOYMENT_TARGET = 11.0
  ICON = sasm.icns
  QMAKE_INFO_PLIST = Info.plist
+ SOURCES -= debugger.cpp
+ SOURCES += macos/debugger.cpp macos/platform.cpp
+ HEADERS += macos/platform.h
+ data.files = $$PWD/Linux/share/sasm/keys.ini
+ data.path = Contents/Resources/sasm
+ macdata.files = $$PWD/macos/lldb_bridge.py
+ macdata.path = Contents/Resources/sasm
+ examples.files = $$files($$PWD/macos/Projects/*)
+ examples.path = Contents/Resources/sasm/Projects
+ macros.files = $$PWD/Linux/share/sasm/NASM/macro.c
+ macros.path = Contents/Resources/sasm/NASM
+ macincludes.files = $$files($$PWD/Linux/share/sasm/include/*.inc) $$PWD/macos/include/macos.inc
+ macincludes.path = Contents/Resources/sasm/include
+ QMAKE_BUNDLE_DATA += data macdata macincludes macros examples
+ INSTALLS -= binfile data shortcutfiles docfiles
 }
 
 CODECFORTR      = UTF-8

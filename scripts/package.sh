@@ -14,6 +14,12 @@ if [[ ! -d "$APP" ]]; then
     exit 1
 fi
 
+if [[ ! -d "$APP/Contents/Frameworks/QtCore.framework" ]]; then
+    echo "Qt frameworks are missing. Run ./scripts/deploy.sh first." >&2
+    exit 1
+fi
+codesign --verify --deep --strict "$APP"
+
 mkdir -p "$DIST"
 rm -f "$ARCHIVE"
 

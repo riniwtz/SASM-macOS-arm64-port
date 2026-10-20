@@ -57,6 +57,8 @@ QString GAS::getAssemblerPath()
             return Common::applicationDataPath() + "/GAS/32/as.exe";
         else
             return Common::applicationDataPath() + "/GAS/64/as.exe";
+    #elif defined(Q_OS_MACOS)
+        return "/usr/bin/clang";
     #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
         return "/usr/bin/as";
     #else
@@ -131,6 +133,9 @@ void GAS::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 o
 
 QString GAS::getStartText()
 {
+#ifdef Q_OS_MACOS
+    return ".text\n.globl _main\n_main:\n    # write your code here\n    xorl %eax, %eax\n    ret\n";
+#endif
     if (isx86()) {
         #ifdef Q_OS_WIN32
             return QString(".text\n.global _main\n_main:\n    # write your code here\n    xorl  %eax, %eax\n    ret\n");
@@ -144,6 +149,10 @@ QString GAS::getStartText()
 
 void GAS::putDebugString(CodeEditor *code)
 {
+#ifdef Q_OS_MACOS
+    Q_UNUSED(code);
+    return;
+#endif
     //add : mov ebp, esp for making frame for correct debugging if this code has not been added yet
     int index = code->toPlainText().indexOf(QRegExp("CMAIN:|main:"));
     if (index != -1) {
@@ -192,6 +201,9 @@ void GAS::putDebugString(CodeEditor *code)
 
 QString GAS::getAssemblerOptions()
 {
+#ifdef Q_OS_MACOS
+    return "-arch x86_64 -x assembler -g -c $SOURCE$ -o $PROGRAM.OBJ$";
+#endif
     QString options;
         if (isx86())
             options = "$SOURCE$ -o $PROGRAM.OBJ$ --32 -a=$LSTOUTPUT$";

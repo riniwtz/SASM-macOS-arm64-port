@@ -39,6 +39,10 @@
 ****************************************************************************/
 
 #include "mainwindow.h"
+#ifdef Q_OS_MACOS
+#include "macos/platform.h"
+#include <QStandardPaths>
+#endif
 
 /**
  * @file mainwindow.cpp
@@ -48,11 +52,18 @@
 MainWindow::MainWindow(const QStringList &args, QWidget *parent)
     : QMainWindow(parent), settings("SASM Project", "SASM")
 {
+    #ifdef Q_OS_MACOS
+        MacOS::initializeSettings(settings);
+    #endif
     setWindowTitle("SASM");
     setWindowIcon(QIcon(":images/mainIcon.png"));
 
     //! Set save and open directory
     saveOpenDirectory = settings.value("saveopendirectory", QString(Common::applicationDataPath() + "/Projects")).toString();
+#ifdef Q_OS_MACOS
+    if (!settings.contains("saveopendirectory") || saveOpenDirectory.contains(".app/Contents/"))
+        saveOpenDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+#endif
 
     //! Initial variables
     programIsBuilded = false;
@@ -614,6 +625,20 @@ void MainWindow::openFile(QString path)
 
     newFile();
     Tab *curTab = (Tab *) tabs->currentWidget();
+#ifdef Q_OS_MACOS
+    // Examples are templates: saving/building them must not modify the signed bundle.
+    const QString resources = QDir(Common::applicationDataPath()).canonicalPath();
+    if (!resources.isEmpty() && QFileInfo(path).canonicalFilePath().startsWith(resources + '/')) {
+        QFile file(path);
+        if (file.open(QIODevice::ReadOnly)) {
+            curTab->code->setPlainText(QString::fromUtf8(file.readAll()));
+            curTab->code->document()->setModified(false);
+            setTabPath(path);
+            saveOpenDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        }
+        return;
+    }
+#endif
     curTab->loadCodeFromFile(path);
     setTabPath(path);
     //connect(curTab, SIGNAL(fileOpened(QString)), this, SLOT(openFile(QString)));
@@ -686,8 +711,13 @@ void MainWindow::saveExe()
     if (!programIsBuilded) {
        return;
     }
+#ifdef Q_OS_MACOS
+    QString saveFileName = QFileDialog::getSaveFileName(this, tr("Save executable"), saveOpenDirectory,
+                                                    tr("All files (*)"));
+#else
     QString saveFileName = QFileDialog::getSaveFileName(this, tr("Save .exe file"), saveOpenDirectory,
                                                     tr("Execution files (*.exe);;All files (*.*)"));
+#endif
     if (saveFileName.isEmpty())
         return;
     saveOpenDirectory = QFileInfo(saveFileName).absoluteDir().absolutePath();
@@ -814,183 +844,113 @@ void MainWindow::changeCurrentTab(int index)
 
 void MainWindow::buildProgram(bool debugMode)
 {
-    saveFile(-1, false); //save file before building if program already was saved
-
+    if (!tabs->currentWidget())
+        return;
+    saveFile(-1, false);
     programIsBuilded = false;
-
-    using Common::applicationDataPath;
     printLogWithTime(tr("Build started...") + '\n', settings.value("fontcolor", QColor(30, 30, 30)).value<QColor>());
-    QCoreApplication::processEvents();
 
-    if (! QFile::exists(applicationDataPath())) {
-        printLogWithTime(tr("Error! Program directory does not exist. Please reinstall the program.") + '\n', Qt::red);
-        QMessageBox::critical(0, tr("Error!"), tr("Directory NASM does not exist. Please reinstall the program."));
+    const QString dataPath = Common::applicationDataPath();
+    if (!QDir(dataPath + "/include").exists()) {
+        printLogWithTime(tr("SASM support files are missing from %1. Rebuild or reinstall the application bundle.")
+                         .arg(dataPath) + '\n', Qt::red);
         return;
     }
 
-    QString tempPath = Common::pathInTemp(QString());
-    removeDirRecuresively(tempPath);
-    QString path = Common::pathInTemp("program.asm");
-
+    removeDirRecuresively(Common::pathInTemp(QString()));
+    const QString source = Common::pathInTemp("program.asm");
+    const QString object = Common::pathInTemp(settings.value("objectfilename", "program.o").toString());
+    const QString program = Common::pathInTemp("SASMprog.exe");
+    const QString macros = Common::pathInTemp("macro.o");
     Tab *currentTab = (Tab *) tabs->currentWidget();
-    currentTab->saveCodeToFile(path, assembler, false, debugMode && settings.value("insertdebugstring", true).toBool());
-
-    if (debugMode) {
-        //! Save input to file
-        QString inputPath = Common::pathInTemp("input.txt");
-        Tab *currentTab = (Tab *) tabs->currentWidget();
-        currentTab->saveInputToFile(inputPath);
-    }
-
-    while (! QFile::exists(path)) {
-    }
-
-    QString stdioMacros = Common::pathInTemp("macro.o");
-
-    //! Assembler
-    QString assemblerPath = assembler->getAssemblerPath();
-    if (settings.contains("assemblerpath"))
-        assemblerPath = settings.value("assemblerpath").toString();
-    QString assemblerOptions = assembler->getAssemblerOptions();
-    if (settings.contains("assemblyoptions"))
-        assemblerOptions = settings.value("assemblyoptions").toString();
-    QStringList assemblerArguments = assemblerOptions.split(QChar(' '));
-    assemblerArguments.replaceInStrings("$SOURCE$", Common::pathInTemp("program.asm"));
-    assemblerArguments.replaceInStrings("$LSTOUTPUT$", Common::pathInTemp("program.lst"));
-    assemblerArguments.replaceInStrings("$PROGRAM.OBJ$",
-        Common::pathInTemp(settings.value("objectfilename", "program.o").toString()));
-    assemblerArguments.replaceInStrings("$PROGRAM$", Common::pathInTemp("SASMprog.exe"));
-    assemblerArguments.replaceInStrings("$MACRO.OBJ$", stdioMacros);
-    QProcess assemblerProcess;
-    QString assemblerOutput = Common::pathInTemp("compilererror.txt");
-    assemblerProcess.setStandardOutputFile(assemblerOutput);
-    assemblerProcess.setStandardErrorFile(assemblerOutput, QIODevice::Append);
-    bool currentDir = settings.value("currentdir", false).toBool();
-    if (currentDir) {
-        QString path = currentTab->getCurrentFilePath();
-        if (!path.isEmpty()) {
-            QString dirPath = QFileInfo(path).absoluteDir().absolutePath();
-            assemblerProcess.setWorkingDirectory(dirPath);
-        } else {
-            assemblerProcess.setWorkingDirectory(applicationDataPath() + "/include");
-        }
-    } else {
-        assemblerProcess.setWorkingDirectory(applicationDataPath() + "/include");
-    }
-    assemblerProcess.start(assemblerPath, assemblerArguments);
-    assemblerProcess.waitForFinished();
-
-    if (assemblerProcess.error() != QProcess::UnknownError) {
-        printLogWithTime(tr("Unable to start assembler. Check your settings.") + '\n', Qt::red);
+    currentTab->saveCodeToFile(source, assembler, false,
+                              debugMode && settings.value("insertdebugstring", true).toBool());
+    if (!QFile::exists(source)) {
+        printLogWithTime(tr("Unable to write temporary source file: %1").arg(source) + '\n', Qt::red);
         return;
     }
+    if (debugMode)
+        currentTab->saveInputToFile(Common::pathInTemp("input.txt"));
 
-    //! GCC
-    QString linkerOptions = assembler->getLinkerOptions();
-    if (settings.contains("linkingoptions"))
-        linkerOptions = settings.value("linkingoptions").toString();
-    //! macro.c compilation/copying
-    QFile macro;
-    #ifdef Q_OS_WIN32
-        QString linker = settings.value("linkerpath", applicationDataPath() + "/MinGW/bin/gcc.exe").toString();
-        if (settings.value("mode", QString("x86")).toString() == "x86") {
-            macro.setFileName(applicationDataPath() + "/NASM/macro.o");
-        } else {
-            macro.setFileName(applicationDataPath() + "/NASM/macro64.o");
+    // Split before substituting paths so bundle/source paths containing spaces
+    // remain single arguments. User options may contain quoted arguments too.
+    const auto arguments = [&](const QString &options) {
+        QStringList args = QProcess::splitCommand(options);
+        args.replaceInStrings("$SOURCE$", source);
+        args.replaceInStrings("$LSTOUTPUT$", Common::pathInTemp("program.lst"));
+        args.replaceInStrings("$PROGRAM.OBJ$", object);
+        args.replaceInStrings("$PROGRAM$", program);
+        args.replaceInStrings("$MACRO.OBJ$", macros);
+        args.replaceInStrings("$INCLUDE$", dataPath + "/include");
+        return args;
+    };
+    const auto execute = [&](const QString &tool, const QStringList &args, const QString &directory) {
+        QProcess process;
+        process.setProcessChannelMode(QProcess::MergedChannels);
+        process.setWorkingDirectory(directory);
+        process.start(Common::executablePath(tool), args);
+        if (!process.waitForStarted()) {
+            printLogWithTime(tr("Unable to start %1: %2").arg(tool, process.errorString()) + '\n', Qt::red);
+            return false;
         }
-        macro.copy(stdioMacros);
-    #else
-        QString gcc = "gcc";
-        QString linker = settings.value("linkerpath", "gcc").toString();
-        macro.setFileName(applicationDataPath() + "/NASM/macro.c");
-        macro.copy(Common::pathInTemp("macro.c"));
+        const bool completed = process.waitForFinished(30000);
+        if (!completed) {
+            process.kill();
+            process.waitForFinished();
+        }
+        const QString output = QString::fromLocal8Bit(process.readAll());
+        if (!output.isEmpty())
+            printLog(output, Qt::red);
+        if (!completed || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+            printLogWithTime(tr("Build failed in %1 (exit code %2). %3")
+                             .arg(tool).arg(process.exitCode())
+                             .arg(completed ? QString() : tr("The tool timed out.")) + '\n', Qt::red);
+            return false;
+        }
+        return true;
+    };
 
-        //! macro.c compilation
-        QStringList gccMArguments;
-        gccMArguments << "-x" << "c" << Common::pathInTemp("macro.c") << "-c" << "-g" << "-o" << stdioMacros;
-        if (settings.value("mode", QString("x86")).toString() == "x86")
-            gccMArguments << "-m32";
-        else
-            gccMArguments << "-m64";
-        QProcess gccMProcess;
-        gccMProcess.start(gcc, gccMArguments);
-        gccMProcess.waitForFinished();
-    #endif
+    QString directory = dataPath + "/include";
+    if (settings.value("currentdir", false).toBool() && !currentTab->getCurrentFilePath().isEmpty())
+        directory = QFileInfo(currentTab->getCurrentFilePath()).absolutePath();
+    const QString assemblyOptions = settings.value("assemblyoptions", assembler->getAssemblerOptions()).toString();
+    if (!execute(settings.value("assemblerpath", assembler->getAssemblerPath()).toString(),
+                 arguments(assemblyOptions), directory))
+        return;
 
-    //! Final linking
-    bool disableLinking = settings.value("disablelinking", false).toBool();
-    QString linkerOutput;
-    if (!disableLinking) {
-        QStringList linkerArguments = linkerOptions.split(QChar(' '));
-        linkerArguments.replaceInStrings("$PROGRAM.OBJ$",
-            Common::pathInTemp(settings.value("objectfilename", "program.o").toString()));
-        linkerArguments.replaceInStrings("$MACRO.OBJ$", stdioMacros);
-        linkerArguments.replaceInStrings("$PROGRAM$", Common::pathInTemp("SASMprog.exe"));
-        linkerArguments.replaceInStrings("$SOURCE$", Common::pathInTemp("program.asm"));
-        linkerArguments.replaceInStrings("$LSTOUTPUT$", Common::pathInTemp("program.lst"));
-        QProcess linkerProcess;
-        linkerOutput = Common::pathInTemp("linkererror.txt");
-        linkerProcess.setStandardOutputFile(linkerOutput);
-        linkerProcess.setStandardErrorFile(linkerOutput, QIODevice::Append);
-        linkerProcess.start(linker, linkerArguments);
-        linkerProcess.waitForFinished();
-
-        if (linkerProcess.error() != QProcess::UnknownError) {
-            printLogWithTime(tr("Unable to start linker. Check your settings.") + '\n', Qt::red);
+    const bool disableLinking = settings.value("disablelinking", false).toBool();
+    const QString linkerOptions = settings.value("linkingoptions", assembler->getLinkerOptions()).toString();
+    if (!disableLinking && linkerOptions.contains("$MACRO.OBJ$")) {
+#ifdef Q_OS_WIN32
+        const QString macroName = assembler->isx86() ? "/NASM/macro.o" : "/NASM/macro64.o";
+        if (!QFile::copy(dataPath + macroName, macros)) {
+            printLogWithTime(tr("Unable to copy the I/O support object.") + '\n', Qt::red);
             return;
         }
+#else
+        QStringList args;
+        args << "-x" << "c" << dataPath + "/NASM/macro.c" << "-c" << "-g" << "-o" << macros;
+#ifdef Q_OS_MACOS
+        const QString compiler = "/usr/bin/clang";
+        args << "-arch" << "x86_64";
+#else
+        const QString compiler = "gcc";
+        args << (assembler->isx86() ? "-m32" : "-m64");
+#endif
+        if (!execute(compiler, args, Common::pathInTemp(QString())))
+            return;
+#endif
     }
-
-    QFile logFile;
-    logFile.setFileName(assemblerOutput);
-    logFile.open(QIODevice::ReadOnly);
-    QTextStream log(&logFile);
-    QString logText = log.readAll();
-    if (settings.value("assembler", QString("NASM")).toString() == "FASM" && logText.count(QChar('\n')) == 2
-            && logText.contains(QRegExp(" bytes\\.")))
-        logText.clear();
-    if (settings.value("assembler", QString("NASM")).toString() == "MASM") {
-        if (logText.count(QChar('\n')) == 1 && logText.startsWith(" Assembling:"))
-            logText.clear();
-        if (logText.count(QChar('\n')) == 6 && logText.contains("ASCII build"))
-            logText.clear();
+    if (!disableLinking && !execute(settings.value("linkerpath", assembler->getLinkerPath()).toString(),
+                                    arguments(linkerOptions), Common::pathInTemp(QString())))
+        return;
+    if (!QFile::exists(disableLinking ? object : program)) {
+        printLogWithTime(tr("The build tool did not produce the expected output file.") + '\n', Qt::red);
+        return;
     }
-    logFile.close();
-
-    bool builded;
-    if (QFile::exists(Common::pathInTemp("SASMprog.exe")))
-        builded = true;
-    else
-        builded = false;
-    if (!builded) {
-        printLogWithTime(tr("Warning! Errors have occurred in the build:") + '\n', Qt::red);
-
-        //! Print errors
-        printLog(logText, Qt::red);
-        if (!disableLinking) {
-            logFile.setFileName(linkerOutput);
-            logFile.open(QIODevice::ReadOnly);
-            QTextStream logLinker(&logFile);
-            logText = logLinker.readAll();
-            logFile.close();
-            printLog(logText, Qt::red);
-        }
-
-        //! QMessageBox::critical(0, tr("Warning!"), tr("Errors have occurred in the build!"));
-    } else {
-        printLogWithTime(tr("Built successfully.") + '\n', Qt::darkGreen);
-        //! print warnings
-        printLog(logText, Qt::red);
-        if (!disableLinking) {
-            logFile.setFileName(linkerOutput);
-            logFile.open(QIODevice::ReadOnly);
-            QTextStream logLinker(&logFile);
-            logText = logLinker.readAll();
-            logFile.close();
-            printLog(logText, Qt::red);
-        }
-        programIsBuilded = true;
-    }
+    printLogWithTime(disableLinking ? tr("Object file built successfully. Enable linking to run it.") + '\n'
+                                    : tr("Built successfully.") + '\n', Qt::darkGreen);
+    programIsBuilded = !disableLinking;
 }
 
 void MainWindow::runProgram()
@@ -1034,6 +994,7 @@ void MainWindow::runProgram()
     programStopped = false;
     connect(runProcess, SIGNAL(started()), this, SLOT(startCountProgramTime()));
     connect(runProcess, SIGNAL(finished(int)), this, SLOT(testStopOfProgram()));
+    runProcess->setProcessChannelMode(QProcess::MergedChannels);
     runProcess->start(program, QStringList());
 
     timer->start(100);
@@ -1060,7 +1021,12 @@ void MainWindow::testStopOfProgram()
         debugAction->setEnabled(true);
         buildAction->setEnabled(true);
         if (!programStopped) {
-            if (runProcess->exitStatus() == QProcess::NormalExit)
+            if (runProcess->error() == QProcess::FailedToStart) {
+                printLogWithTime(tr("Unable to run the program: %1").arg(runProcess->errorString()) + '\n', Qt::red);
+#ifdef Q_OS_MACOS
+                printLog(tr("NASM builds Intel x86-64 programs. Apple Silicon requires Apple's Intel translation support to run them.\n"), Qt::red);
+#endif
+            } else if (runProcess->exitStatus() == QProcess::NormalExit)
                 printLogWithTime(tr("The program finished normally. Execution time: %1 s")
                                  .arg(programExecutionTime.elapsed() / 1000.0)
                                  + '\n', Qt::darkGreen);
@@ -1084,7 +1050,8 @@ void MainWindow::runExeProgram()
     }
 
     QString program = Common::pathInTemp("SASMprog.exe");
-    runProcess->startDetached(program, QStringList());
+    if (!QProcess::startDetached(program, QStringList()))
+        printLogWithTime(tr("Unable to launch the executable. Check that Intel translation support is available on Apple Silicon.") + '\n', Qt::red);
 }
 
 void MainWindow::stopProgram()
@@ -1879,6 +1846,12 @@ void MainWindow::initAssemblerSettings(bool firstOpening)
              *
              */
 
+        #ifdef Q_OS_MACOS
+            settingsUi.x86RadioButton->setEnabled(false);
+            settingsUi.x86RadioButton->setToolTip(tr("macOS requires 64-bit programs."));
+            settingsUi.fasmRadioButton->setEnabled(false);
+            settingsUi.fasmRadioButton->setToolTip(tr("FASM does not provide this macOS Mach-O toolchain."));
+        #endif
         connect(settingsUi.x86RadioButton, SIGNAL(toggled(bool)), this, SLOT(changeMode(bool)));
 
         //! Start text editor
@@ -1909,11 +1882,7 @@ void MainWindow::initAssemblerSettings(bool firstOpening)
     QString assemblerPath = assembler->getAssemblerPath();
     settingsUi.assemblerPathEdit->setText(settings.value("assemblerpath", assemblerPath).toString());
 
-    #ifdef Q_OS_WIN32
-        settingsUi.linkerPathEdit->setText(settings.value("linkerpath", Common::applicationDataPath() + "/MinGW/bin/gcc.exe").toString());
-    #else
-        settingsUi.linkerPathEdit->setText(settings.value("linkerpath", "gcc").toString());
-    #endif
+    settingsUi.linkerPathEdit->setText(settings.value("linkerpath", assembler->getLinkerPath()).toString());
 
     disconnect(settingsUi.x86RadioButton, SIGNAL(toggled(bool)), this, SLOT(changeMode(bool)));
     //! Mode

@@ -39,6 +39,7 @@
 ****************************************************************************/
 
 #include "common.h"
+#include <QStandardPaths>
 
 /**
  * @file common.cpp
@@ -56,6 +57,8 @@ QString Common::applicationDataPath()
             appDir = QCoreApplication::applicationDirPath();
         }
         return appDir;
+    #elif defined(Q_OS_MACOS)
+        return QDir(QCoreApplication::applicationDirPath()).absoluteFilePath("../Resources/sasm");
     #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined( __NetBSD__) || defined(__DragonFly__)
         QString path = QCoreApplication::applicationDirPath();
         QString appDir = path.left(path.length() - 4) + QString("/share/sasm"); //replace /bin with /share/sasm
@@ -77,6 +80,21 @@ QString Common::applicationDataPath()
         }
         return appDir;
     #endif
+}
+
+QString Common::executablePath(const QString &name)
+{
+    if (name.contains('/'))
+        return name;
+    QString path = QStandardPaths::findExecutable(name);
+#ifdef Q_OS_MACOS
+    // Finder does not inherit the user's shell PATH.
+    if (path.isEmpty())
+        path = QStandardPaths::findExecutable(name, QStringList()
+            << "/opt/homebrew/bin" << "/usr/local/bin" << "/opt/local/bin"
+            << "/usr/bin" << "/bin");
+#endif
+    return path.isEmpty() ? name : path;
 }
 
 QString Common::pathInTemp(QString path)

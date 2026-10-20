@@ -54,6 +54,8 @@ QString NASM::getAssemblerPath()
 {
     #ifdef Q_OS_WIN32
         return Common::applicationDataPath() + "/NASM/nasm.exe";
+    #elif defined(Q_OS_MACOS)
+        return Common::executablePath("nasm");
     #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
         return "/usr/local/bin/nasm";
     #else
@@ -160,6 +162,9 @@ void NASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
 
 QString NASM::getStartText()
 {
+#ifdef Q_OS_MACOS
+    return "default rel\nsection .text\nglobal main\nmain:\n    ;write your code here\n    xor eax, eax\n    ret\n";
+#endif
     if (isx86()) {
         return QString("section .text\nglobal main\n") +
                QString("main:\n    ;write your code here\n    xor eax, eax\n    ret");
@@ -171,6 +176,11 @@ QString NASM::getStartText()
 
 void NASM::putDebugString(CodeEditor *code)
 {
+#ifdef Q_OS_MACOS
+    Q_UNUSED(code);
+    // LLDB uses DWARF line tables; changing rbp without restoring it breaks the ABI.
+    return;
+#endif
     //! add : mov ebp, esp for making frame for correct debugging if this code has not been added yet
     int index = code->toPlainText().indexOf(QRegExp("CMAIN:|main:"));
     if (index != -1) {
@@ -203,6 +213,8 @@ QString NASM::getAssemblerOptions()
             options = "--gprefix _ -f win32 $SOURCE$ -l $LSTOUTPUT$ -o $PROGRAM.OBJ$";
         else
             options = "-f win64 $SOURCE$ -l $LSTOUTPUT$ -o $PROGRAM.OBJ$";
+    #elif defined(Q_OS_MACOS)
+        options = "-f macho64 -g -F dwarf -I $INCLUDE$/ -p $INCLUDE$/macos.inc $SOURCE$ -l $LSTOUTPUT$ -o $PROGRAM.OBJ$";
     #else
         if (isx86())
             options = "-f elf32 $SOURCE$ -l $LSTOUTPUT$ -o $PROGRAM.OBJ$";

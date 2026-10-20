@@ -48,6 +48,37 @@
 #include <QInputDialog>
 #include <QPalette>
 
+#ifdef Q_OS_MACOS
+#include <QFileOpenEvent>
+
+class MacApplication : public QtSingleApplication
+{
+public:
+    MacApplication(int &argc, char **argv) : QtSingleApplication(argc, argv), window(0) {}
+    MainWindow *window;
+    QStringList pendingFiles;
+protected:
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::FileOpen) {
+            const QString file = static_cast<QFileOpenEvent *>(event)->file();
+            if (!file.isEmpty()) {
+                if (window) {
+                    window->openFile(file);
+                    window->show();
+                    window->raise();
+                    window->activateWindow();
+                } else {
+                    pendingFiles.append(file);
+                }
+            }
+            return true;
+        }
+        return QtSingleApplication::event(event);
+    }
+};
+#endif
+
 /**
  * @file main.cpp
  *
@@ -59,7 +90,11 @@ int main(int argc, char *argv[])
     #if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
         QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     #endif
-    QtSingleApplication a(argc, argv);
+    #ifdef Q_OS_MACOS
+        MacApplication a(argc, argv);
+    #else
+        QtSingleApplication a(argc, argv);
+    #endif
     QSettings settings("SASM Project", "SASM");
     QPalette palette;
     palette.setColor(QPalette::Window, settings.value("backgroundcolor", QColor(255, 255, 255)).value<QColor>());
@@ -189,6 +224,12 @@ int main(int argc, char *argv[])
     }
 
     MainWindow w(a.arguments());
+    #ifdef Q_OS_MACOS
+        a.window = &w;
+        foreach (const QString &file, a.pendingFiles)
+            w.openFile(file);
+        a.pendingFiles.clear();
+    #endif
 
     QObject::connect(&a, SIGNAL(messageReceived(const QString&)), &w, SLOT(onMessageReceived(const QString&)));
 
