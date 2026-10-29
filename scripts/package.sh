@@ -4,9 +4,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-APP="$ROOT_DIR/source/src/sasm/BUILD/build-macos/sasm.app"
+APP="$ROOT_DIR/source/src/sasm/BUILD/build-macos-qt6/sasm.app"
 DIST="$ROOT_DIR/dist"
-ARCHIVE="$DIST/SASM-3.16.0-macOS-arm64.zip"
+source "$ROOT_DIR/versions.env"
+ARCHIVE="$DIST/SASM-${SASM_RELEASE_TAG#v}-macOS-arm64.zip"
 
 if [[ ! -d "$APP" ]]; then
     echo "Error: SASM application not found."
@@ -18,6 +19,7 @@ if [[ ! -d "$APP/Contents/Frameworks/QtCore.framework" ]]; then
     echo "Qt frameworks are missing. Run ./scripts/deploy.sh first." >&2
     exit 1
 fi
+python3 "$ROOT_DIR/scripts/check-bundle.py" "$APP"
 codesign --verify --deep --strict "$APP"
 
 mkdir -p "$DIST"

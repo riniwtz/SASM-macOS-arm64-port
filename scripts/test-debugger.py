@@ -62,7 +62,12 @@ class Client:
 
     def close(self):
         if self.process.poll() is None:
-            self.send("quit")
+            try:
+                self.send("quit")
+            except OSError:
+                # LLDB can exit while writing the shutdown command, especially
+                # when a runner denies its attempt to launch the debuggee.
+                pass
             try:
                 self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:
