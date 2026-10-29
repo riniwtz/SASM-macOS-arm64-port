@@ -141,9 +141,11 @@ void Tab::saveCodeToFile(const QString &filePath, Assembler *assembler, bool cha
 {
     QFile outfile;
     outfile.setFileName(filePath);
-    outfile.open(QIODevice::WriteOnly | QIODevice::Text);
+    if (!outfile.open(QIODevice::WriteOnly | QIODevice::Text)) return;
     QTextStream out(&outfile);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     out.setCodec("UTF-8");
+#endif
     if (debugMode) {
         assembler->putDebugString(code);
     }
@@ -163,9 +165,11 @@ void Tab::loadCodeFromFile(const QString &filePath)
 {
     QFile file;
     file.setFileName(filePath);
-    file.open(QIODevice::ReadOnly);
+    if (!file.open(QIODevice::ReadOnly)) return;
     QTextStream text(&file);
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     text.setCodec("UTF-8");
+#endif
     QString source = text.readAll();
     code->setPlainText(source);
     currentFilePath = filePath;
@@ -181,7 +185,7 @@ void Tab::saveInputToFile(const QString &filePath)
 {
     QFile outfile;
     outfile.setFileName(filePath);
-    outfile.open(QIODevice::WriteOnly | QIODevice::Text);
+    if (!outfile.open(QIODevice::WriteOnly | QIODevice::Text)) return;
     QTextStream out(&outfile);
     out << input->toPlainText();
     outfile.close();
@@ -195,7 +199,7 @@ void Tab::loadOutputFromFile(const QString &filePath)
 {
     QFile outputFile;
     outputFile.setFileName(filePath);
-    outputFile.open(QIODevice::ReadOnly);
+    if (!outputFile.open(QIODevice::ReadOnly)) return;
     QTextStream programOut(&outputFile);
     QString out = programOut.readAll();
     output->setPlainText(out);

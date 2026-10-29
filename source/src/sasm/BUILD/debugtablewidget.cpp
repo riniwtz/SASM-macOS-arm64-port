@@ -237,7 +237,7 @@ void DebugTableWidget::mousePressEvent(QMouseEvent *event)
         QAction *deleteAction = new QAction(tr("Delete watch"), this);
         connect(deleteAction, SIGNAL(triggered()), this, SLOT(deleteVariable()));
         menu->addAction(deleteAction);
-        menu->exec(event->globalPos());
+        menu->exec(event->globalPosition().toPoint());
         delete deleteAction;
         delete menu;
     } else

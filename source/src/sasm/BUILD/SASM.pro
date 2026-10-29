@@ -4,8 +4,12 @@
 #
 #-------------------------------------------------
 
+include(../../../../versions.env)
+DEFINES += SASM_VERSION=\\\"$$SASM_VERSION\\\" SASM_RELEASE_TAG=\\\"$$SASM_RELEASE_TAG\\\"
 QT       += core gui
-CONFIG += c++11
+CONFIG += c++17
+lessThan(QT_MAJOR_VERSION, 6): error("SASM requires Qt 6.8 or newer")
+!versionAtLeast(QT_VERSION, 6.8.0): error("SASM requires Qt 6.8 or newer")
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -50,7 +54,7 @@ INSTALLS += docfiles
 
 include(singleapplication/qtsingleapplication.pri)
 
-SOURCES += main.cpp\
+SOURCES += updater.cpp theme.cpp main.cpp\
         mainwindow.cpp \
     tab.cpp \
     highlighter.cpp \
@@ -72,7 +76,7 @@ SOURCES += main.cpp\
     masm.cpp \
     gccbasedassembler.cpp
 
-HEADERS  += mainwindow.h \
+HEADERS  += updater.h regexp.h theme.h mainwindow.h \
     tab.h \
     highlighter.h \
     codeeditor.h \
@@ -105,7 +109,7 @@ win32 {
 }
 
 macx {
- QMAKE_MACOSX_DEPLOYMENT_TARGET = 11.0
+ QMAKE_MACOSX_DEPLOYMENT_TARGET = 14.4
  ICON = sasm.icns
  QMAKE_INFO_PLIST = Info.plist
  SOURCES -= debugger.cpp
@@ -113,7 +117,7 @@ macx {
  HEADERS += macos/platform.h
  data.files = $$PWD/Linux/share/sasm/keys.ini
  data.path = Contents/Resources/sasm
- macdata.files = $$PWD/macos/lldb_bridge.py
+ macdata.files = $$PWD/macos/lldb_bridge.py $$PWD/macos/install_update.py
  macdata.path = Contents/Resources/sasm
  examples.files = $$files($$PWD/macos/Projects/*)
  examples.path = Contents/Resources/sasm/Projects

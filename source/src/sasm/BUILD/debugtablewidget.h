@@ -2,7 +2,7 @@
 #define DEBUGTABLEWIDGET_H
 
 #include <QTableWidget>
-#include <QDesktopWidget>
+
 #include <QHeaderView>
 #include <QMouseEvent>
 #include <QAction>

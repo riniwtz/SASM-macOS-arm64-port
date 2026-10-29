@@ -97,7 +97,7 @@ Debugger::Debugger(QTextEdit *tEdit,
         QString objdump = "objdump";
         exitMessage = "libc_start";
     #endif
-    cExitMessage = QRegExp("\\[Inferior .* exited");
+    cExitMessage = SasmRegExp("\\[Inferior .* exited");
 
     connect(this, SIGNAL(wasStopped()), this, SLOT(emitStarted()));
 
@@ -243,7 +243,7 @@ void Debugger::processMessage(QString output, QString error)
             //in example we need 0x00401390
 
             //count offset
-            QRegExp r = QRegExp("0x[0-9a-fA-F]{8,16}");
+            SasmRegExp r = SasmRegExp("0x[0-9a-fA-F]{8,16}");
             int index = r.indexIn(output);
             //take offset in hexadecimal representation (10 symbols) from string and convert it to int
             offset = output.mid(index, r.matchedLength()).toULongLong(0, 16);
@@ -293,11 +293,11 @@ void Debugger::processMessage(QString output, QString error)
     }
 
     if (!pid) {
-        QRegExp r("Num +Description +(Connection +)?Executable");
+        SasmRegExp r("Num +Description +(Connection +)?Executable");
         int index = output.indexOf(r);
         if (index != -1) {
             QString processString("process ");
-            r = QRegExp(processString + "[0-9]+");
+            r = SasmRegExp(processString + "[0-9]+");
             index = output.indexOf(r);
             output = output.mid(index + processString.length());
             output = output.split(QChar(' ')).at(0);
@@ -314,12 +314,12 @@ void Debugger::processMessage(QString output, QString error)
 
 void Debugger::processAction(QString output, QString error)
 {
-    bool backtrace = (output.indexOf(QRegExp("#\\d+  0x[0-9a-fA-F]{8,16} in .* ()")) != -1);
+    bool backtrace = (output.indexOf(SasmRegExp("#\\d+  0x[0-9a-fA-F]{8,16} in .* ()")) != -1);
     if (output.indexOf(exitMessage) != -1 && !backtrace) {
         doInput("c\n", none);
         return;
     }
-    if (output.indexOf(QRegExp(cExitMessage)) != -1) { //if debug finished
+    if (output.indexOf(SasmRegExp(cExitMessage)) != -1) { //if debug finished
         //print output - message like bottom
             /*Breakpoint 1, 0x08048510 in sasmStartL ()
             "
@@ -329,8 +329,8 @@ void Debugger::processAction(QString output, QString error)
             [Inferior 1 (process 5693) exited normally]
             " */
 
-        QRegExp continuingMsg("Continuing.\r?\n");
-        QRegExp inferiorMsg("\\[Inferior ");
+        SasmRegExp continuingMsg("Continuing.\r?\n");
+        SasmRegExp inferiorMsg("\\[Inferior ");
         int continuingIndex = continuingMsg.indexIn(output);
         int continuingLength = continuingMsg.matchedLength();
         int inferiorIndex = inferiorMsg.indexIn(output);
@@ -359,7 +359,7 @@ void Debugger::processAction(QString output, QString error)
         //message is: line number + data
         //print line number and other data if si or ni and print line number only if showLine
         //scan line number in memory
-        QRegExp r = QRegExp("0x[0-9a-fA-F]{8,16}");
+        SasmRegExp r = SasmRegExp("0x[0-9a-fA-F]{8,16}");
         int index = r.indexIn(output);
 
         //! If no address found in output, the program may have exited or GDB is in an error state.
@@ -381,16 +381,16 @@ void Debugger::processAction(QString output, QString error)
         if (index > 1 && !firstAction) {
             QString msg = output.left(index); //left part - probably output of program;
             msg.remove(0, 1); //remove first whitespace
-            QRegExp continuingMsg("Continuing.\r?\n");
-            QRegExp breakpointMsg("\r?\nBreakpoint \\d+, ");
-            QRegExp threadMsg("\\[Switching to Thread [^\\]]*\\]\r?\n");
-            QRegExp signalMsg("\r?\n(Program received signal.*)");
+            SasmRegExp continuingMsg("Continuing.\r?\n");
+            SasmRegExp breakpointMsg("\r?\nBreakpoint \\d+, ");
+            SasmRegExp threadMsg("\\[Switching to Thread [^\\]]*\\]\r?\n");
+            SasmRegExp signalMsg("\r?\n(Program received signal.*)");
             msg.remove(continuingMsg);
             msg.remove(breakpointMsg);
             msg.remove(threadMsg);
             if (signalMsg.indexIn(msg) != -1) {
                 QString recievedSignal = signalMsg.cap(1);
-                if (QRegExp("SIG(TRAP|INT)").indexIn(recievedSignal) == -1) {
+                if (SasmRegExp("SIG(TRAP|INT)").indexIn(recievedSignal) == -1) {
                     emit printLog(recievedSignal, Qt::red);
                 }
                 msg.remove(signalMsg);
@@ -436,7 +436,7 @@ void Debugger::processAction(QString output, QString error)
         if (output[output.length() - 1] != '\n')
             output += QChar('\n');
         //process as ni or si
-        if (output.indexOf(QRegExp("0x[0-9a-fA-F]{8,16} in ")) != -1
+        if (output.indexOf(SasmRegExp("0x[0-9a-fA-F]{8,16} in ")) != -1
                 && !backtrace) {
             actionTypeQueue.enqueue(showLine);
             processAction(output);
@@ -455,7 +455,7 @@ void Debugger::processAction(QString output, QString error)
                 output.indexOf(QString("no debug info")) == -1 && output != QString(" ")) {
             //if variable exists (isValid = true)
             isValid = true;
-            int index = output.indexOf(QRegExp("\\$\\d+ = .*"));
+            int index = output.indexOf(SasmRegExp("\\$\\d+ = .*"));
             if (index == -1)
                 isValid = false;
             else {
@@ -490,10 +490,10 @@ void Debugger::processAction(QString output, QString error)
         flags << "eflags" << "mxcsr";
         QSet<QString> fpu_info;
         fpu_info << "fctrl" << "fstat" << "ftag" << "fiseg" << "fioff" << "foseg" << "fooff" << "fop";
-        QRegExp mmx("mm\\d+");
-        QRegExp xmm("xmm\\d+");
-        QRegExp ymm("ymm\\d+");
-        QRegExp fpu_stack("st\\d+");
+        SasmRegExp mmx("mm\\d+");
+        SasmRegExp xmm("xmm\\d+");
+        SasmRegExp ymm("ymm\\d+");
+        SasmRegExp fpu_stack("st\\d+");
 
         if (settings.value("mode", QString("x86")).toString() == "x86") {
             //x86

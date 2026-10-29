@@ -1,5 +1,8 @@
 #include "../mainwindow.h"
 #include "platform.h"
+#include "../theme.h"
+#include "../updater.h"
+#include <QJsonArray>
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QSignalSpy>
@@ -31,6 +34,69 @@ private slots:
         QSettings settings("SASM Project", "SASM");
         settings.clear();
         settings.setValue("language", 1);
+    }
+    void releaseVersionsAndAssets()
+    {
+        QVERIFY(Updater::newer("v3.17.0-macos.10", "v3.17.0-macos.2"));
+        QVERIFY(Updater::newer("v3.18.0", "v3.17.0-macos.10"));
+        QVERIFY(!Updater::newer("v3.17.0-beta.1", "v3.16.0"));
+        QVERIFY(!Updater::newer("v3.17.0-macos.1", "v3.17.0-macos.1"));
+        QVERIFY(!Updater::newer("v3.16.0-macos.9", "v3.17.0-macos.1"));
+        QJsonObject asset{{"name", "SASM-3.18.0-macos.1-macOS-arm64.zip"},
+            {"state", "uploaded"}, {"size", 123}, {"digest", "sha256:" + QString(64, 'a')},
+            {"browser_download_url", "https://github.com/riniwtz/SASM-macOS-arm64-port/releases/download/v3.18.0-macos.1/SASM-3.18.0-macos.1-macOS-arm64.zip"}};
+        QJsonObject release{{"tag_name", "v3.18.0-macos.1"}, {"draft", false}, {"prerelease", false}, {"assets", QJsonArray{asset}}};
+        QCOMPARE(Updater::parse(release, "v3.17.0-macos.1").tag, QString("v3.18.0-macos.1"));
+        release["prerelease"] = true;
+        QVERIFY(Updater::parse(release, "v3.17.0-macos.1").tag.isEmpty());
+        release["prerelease"] = false;
+        asset["digest"] = "";
+        release["assets"] = QJsonArray{asset};
+        QVERIFY(Updater::parse(release, "v3.17.0-macos.1").tag.isEmpty());
+        asset["digest"] = "sha256:" + QString(64, 'a');
+        asset["browser_download_url"] = "https://example.com/update.zip";
+        release["assets"] = QJsonArray{asset};
+        QVERIFY(Updater::parse(release, "v3.17.0-macos.1").tag.isEmpty());
+    }
+    void themesApplyToOpenDocuments()
+    {
+        MainWindow window(QStringList() << "test");
+        source(window, "section .text\nglobal _main\n_main:\n xor eax, eax\n ret\n");
+        const auto original = window.findChildren<Tab *>().last()->code->toPlainText();
+        window.show();
+        window.resize(1100, 740);
+        for (const QString &mode : {QString("dark"), QString("light")}) {
+            auto action = window.findChild<QAction *>("theme-" + mode);
+            QVERIFY(action);
+            action->trigger();
+            auto editor = window.findChildren<Tab *>().last()->code;
+            QCOMPARE(editor->toPlainText(), original);
+            const QColor bg = editor->palette().color(QPalette::Base);
+            const QColor fg = editor->palette().color(QPalette::Text);
+            QVERIFY(qAbs(bg.lightness() - fg.lightness()) > 150);
+            QCOMPARE(bg.lightness() < 128, mode == "dark");
+            QCoreApplication::processEvents();
+            if (qEnvironmentVariableIsSet("SASM_THEME_SNAPSHOTS"))
+                window.grab().save("/private/tmp/sasm-theme-" + mode + ".png");
+        }
+        window.openSettings();
+        auto button = window.findChild<QPushButton *>("darkThemeButton");
+        QVERIFY(button);
+        button->click();
+        QVERIFY(qApp->palette().color(QPalette::Base).lightness() < 128);
+    }
+    void regexCaptureCompatibility()
+    {
+        SasmRegExp rx("^ +([0-9]+) +([0-9a-f]+)");
+        rx.setCaseSensitivity(Qt::CaseInsensitive);
+        QCOMPARE(rx.indexIn("  42  AB12 mov eax, eax"), 0);
+        QCOMPARE(rx.cap(2), QString("AB12"));
+        QVERIFY(rx.matchedLength() > 0);
+        QCOMPARE(rx.indexIn("missing"), -1);
+        SasmRegExp quoted("\".*\"");
+        quoted.setMinimal(true);
+        QCOMPARE(quoted.indexIn("\"one\" \"two\""), 0);
+        QCOMPARE(quoted.cap(), QString("\"one\""));
     }
     void supportFiles()
     {
@@ -67,6 +133,21 @@ private slots:
         QVERIFY2(logs(window).contains("Built successfully."), qPrintable(logs(window)));
         QVERIFY(QFile::exists(Common::pathInTemp("SASMprog.exe")));
         QVERIFY2(!logs(window).contains("no platform load command"), qPrintable(logs(window)));
+    }
+    void savedNasmOptionsCarryPlatform()
+    {
+        QSettings settings("SASM Project", "SASM");
+        settings.setValue("assemblyoptions", "-f macho64 $SOURCE$ -l $LSTOUTPUT$ -o $PROGRAM.OBJ$");
+        MainWindow window(QStringList() << "test");
+        source(window, "section .text\nglobal _main\n_main:\n xor eax, eax\n ret\n");
+        window.buildProgram();
+        QVERIFY2(logs(window).contains("Built successfully."), qPrintable(logs(window)));
+        QVERIFY2(!logs(window).contains("no platform load command"), qPrintable(logs(window)));
+        QProcess otool;
+        otool.start("/usr/bin/otool", QStringList() << "-l" << Common::pathInTemp("program.o"));
+        QVERIFY(otool.waitForFinished());
+        QCOMPARE(otool.exitCode(), 0);
+        QVERIFY(otool.readAllStandardOutput().contains("LC_BUILD_VERSION"));
     }
     void examplesBuild_data()
     {

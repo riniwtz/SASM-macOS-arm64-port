@@ -39,6 +39,7 @@
 ****************************************************************************/
 
 #include "codeeditor.h"
+#include <QRegularExpression>
 
 /**
  * @file codeeditor.cpp
@@ -113,7 +114,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event)
 {
     // !Paint on line number area
     QPainter painter(lineNumberArea);
-    painter.fillRect(event->rect(), lineNumberPanelColor);
+    painter.fillRect(event->rect(), settings.value("linenumberpanelcolor", palette().color(QPalette::AlternateBase)).value<QColor>());
 
     QTextBlock block = firstVisibleBlock();
     int blockNumber = block.blockNumber();
@@ -154,7 +155,7 @@ void CodeEditor::lineNumberAreaMousePressEvent(QMouseEvent *event)
         int lineNumber = 0;
         int sumHeight = 0;
         QTextBlock block = firstVisibleBlock();
-        while (block.isValid() && event->y() > sumHeight) {
+        while (block.isValid() && event->position().y() > sumHeight) {
             sumHeight += blockBoundingGeometry(block).height();
             block = block.next();
             lineNumber++;
@@ -454,7 +455,7 @@ bool CodeEditor::isMacroOnCurrentDebugLine()
                           "\\bGET_HEX\\b" << "\\bGET_CHAR\\b" <<
                           "\\bGET_STRING\\b" << "\\bCMAIN\\b" << "\\bCEXTERN\\b";
         foreach (const QString &pattern, macrosPatterns) {
-            QRegExp regExp(pattern, Qt::CaseSensitive);
+            QRegularExpression regExp(pattern);
             if (text.indexOf(regExp) != -1)
                 return true;
         }

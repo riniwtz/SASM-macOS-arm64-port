@@ -96,7 +96,7 @@ void Debugger::processMessage(QString output, QString)
         emit printOutput(message.value("text").toString());
     } else if (event == "registers") {
         QList<registersInfo> values;
-        foreach (const QJsonValue &value, message.value("values").toArray()) {
+        for (const QJsonValue &value : message.value("values").toArray()) {
             const QJsonObject item = value.toObject();
             registersInfo info;
             info.name = item.value("name").toString();

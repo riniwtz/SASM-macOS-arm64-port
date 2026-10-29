@@ -73,8 +73,8 @@ private:
 
      bool isCommentInQuote(const QString &text, int index);
 
-     QRegExp commentStartExpression;
-     QRegExp commentEndExpression;
+     SasmRegExp commentStartExpression;
+     SasmRegExp commentEndExpression;
      bool multiLineComments;
      QTextCharFormat commentFormat;
 };

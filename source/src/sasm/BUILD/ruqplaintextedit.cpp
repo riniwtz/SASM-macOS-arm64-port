@@ -39,6 +39,7 @@
 ****************************************************************************/
 
 #include "ruqplaintextedit.h"
+#include <QRegularExpression>
 
 /**
  * @file ruplaintextedit.cpp
@@ -174,7 +175,7 @@ QMenu * RuQPlainTextEdit::createMenu()
 
 void RuQPlainTextEdit::contextMenuEvent(QContextMenuEvent *e)
 {
-    QMouseEvent leftClick(QEvent::MouseButtonPress, e->pos(), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QMouseEvent leftClick(QEvent::MouseButtonPress, e->pos(), e->globalPos(), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
     mousePressEvent(&leftClick);
     contextMenu = createMenu();
     contextMenu->exec(e->globalPos());
@@ -222,7 +223,7 @@ RuQPlainTextEdit::Watch RuQPlainTextEdit::variableOnCurrentLine()
                       "\\bdy\\b" << "\\bequ\\b";
     bool isVariableLine = false;
     foreach (const QString &pattern, memoryPatterns)
-        if (text.indexOf(QRegExp(pattern)) != -1) {
+        if (text.indexOf(QRegularExpression(pattern)) != -1) {
             isVariableLine = true;
             break;
         }

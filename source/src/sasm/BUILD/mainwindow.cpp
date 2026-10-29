@@ -39,8 +39,12 @@
 ****************************************************************************/
 
 #include "mainwindow.h"
+#include "theme.h"
+#include <QStyleHints>
+#include <QActionGroup>
 #ifdef Q_OS_MACOS
 #include "macos/platform.h"
+#include <QRegularExpression>
 #include <QStandardPaths>
 #endif
 
@@ -72,6 +76,7 @@ MainWindow::MainWindow(const QStringList &args, QWidget *parent)
     settingsWindow = 0;
     closeFromCloseAll = false;
     settingsStartTextEditor = 0;
+    settingsHighlighter = 0;
     help = 0;
     registersWindow = 0;
     memoryWindow = 0;
@@ -142,7 +147,7 @@ void MainWindow::initUi()
     splitter->setOrientation(Qt::Vertical);
     workLayout = new QVBoxLayout;
     workLayout->addWidget(splitter);
-    workLayout->setMargin(0);
+    workLayout->setContentsMargins(0, 0, 0, 0);
     workLayout->setSpacing(0);
     workWidget = new QWidget;
     workWidget->setLayout(workLayout);
@@ -245,6 +250,29 @@ void MainWindow::createMenus()
     debugMenu->addAction(stopAction);
     settingsMenu = menuBar()->addMenu(tr("Settings"));
     settingsMenu->addAction(settingsAction);
+    QMenu *appearance = settingsMenu->addMenu(tr("Appearance"));
+    QActionGroup *themes = new QActionGroup(this);
+    const QStringList modes = {"system", "light", "dark", "custom"};
+    const QStringList labels = {tr("System"), tr("Light"), tr("Dark"), tr("Custom editor colors")};
+    auto refreshTheme = [this]() {
+        Theme::apply(settings);
+        recreateHighlighter();
+        for (CodeEditor *editor : findChildren<CodeEditor *>()) editor->highlightCurrentLine();
+    };
+    for (int i = 0; i < modes.size(); ++i) {
+        QAction *action = appearance->addAction(labels[i]);
+        action->setObjectName("theme-" + modes[i]);
+        themes->addAction(action);
+        action->setCheckable(true);
+        action->setChecked(settings.value("appearance/mode", "system").toString() == modes[i]);
+        connect(action, &QAction::triggered, this, [this, mode = modes[i], refreshTheme]() {
+            Theme::select(settings, mode);
+            refreshTheme();
+        });
+    }
+    connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, [this, refreshTheme]() {
+        if (settings.value("appearance/mode").toString() == "system") refreshTheme();
+    });
     helpMenu = menuBar()->addMenu(tr("Help"));
     helpMenu->addAction(helpAction);
     helpMenu->addAction(aboutAction);
@@ -914,8 +942,18 @@ void MainWindow::buildProgram(bool debugMode)
     if (settings.value("currentdir", false).toBool() && !currentTab->getCurrentFilePath().isEmpty())
         directory = QFileInfo(currentTab->getCurrentFilePath()).absolutePath();
     const QString assemblyOptions = settings.value("assemblyoptions", assembler->getAssemblerOptions()).toString();
+    QStringList assemblyArguments = arguments(assemblyOptions);
+#ifdef Q_OS_MACOS
+    // Saved NASM options can predate the bundled macos.inc. Ensure Mach-O
+    // objects carry a platform load command even with those configurations.
+    if (qobject_cast<NASM *>(assembler) && assemblyArguments.contains("macho64") &&
+        !assemblyOptions.contains(QRegularExpression("macho\\s+build_version", QRegularExpression::CaseInsensitiveOption))) {
+        assemblyArguments.prepend("macho build_version macos,11,0");
+        assemblyArguments.prepend("--pragma");
+    }
+#endif
     if (!execute(settings.value("assemblerpath", assembler->getAssemblerPath()).toString(),
-                 arguments(assemblyOptions), directory))
+                 assemblyArguments, directory))
         return;
 
     const bool disableLinking = settings.value("disablelinking", false).toBool();
@@ -1082,7 +1120,7 @@ void MainWindow::printLog(const QString &message, const QColor &color)
     QTextCursor cursor = QTextCursor(compilerOut->document());
     cursor.movePosition(QTextCursor::End);
     compilerOut->setTextCursor(cursor);
-    compilerOut->setTextColor(color);
+    compilerOut->setTextColor(Theme::logColor(color));
     compilerOut->insertPlainText(message);
     cursor.movePosition(QTextCursor::End);
     compilerOut->setTextCursor(cursor);
@@ -1544,7 +1582,7 @@ void MainWindow::findNext(const QString &pattern, Qt::CaseSensitivity cs, bool a
                     if (cs == Qt::CaseSensitive)
                         newCursor = document->find(pattern, newCursor, QTextDocument::FindCaseSensitively);
                     else
-                        newCursor = document->find(pattern, newCursor, 0);
+                        newCursor = document->find(pattern, newCursor, QTextDocument::FindFlags());
                     //! Replace mode
                     if (replace && i == tabs->currentIndex()) {
                         newCursor.removeSelectedText();
@@ -1576,13 +1614,13 @@ void MainWindow::findNext(const QString &pattern, Qt::CaseSensitivity cs, bool a
             if (cs == Qt::CaseSensitive)
                 newCursor = document->find(pattern, newCursor, QTextDocument::FindCaseSensitively);
             else
-                newCursor = document->find(pattern, newCursor, 0);
+                newCursor = document->find(pattern, newCursor, QTextDocument::FindFlags());
              //! Continue from start
             if (newCursor.isNull()) {
                 if (cs == Qt::CaseSensitive)
                     newCursor = document->find(pattern, newCursor, QTextDocument::FindCaseSensitively);
                 else
-                    newCursor = document->find(pattern, newCursor, 0);
+                    newCursor = document->find(pattern, newCursor, QTextDocument::FindFlags());
             }
             if (!newCursor.isNull()) {
                 selection.cursor = newCursor;
@@ -1692,7 +1730,7 @@ void MainWindow::openSettings()
             connect(colorButtons[i], SIGNAL(clicked()), colorSignalMapper, SLOT(map()));
             colorSignalMapper->setMapping(colorButtons[i], colorButtons[i]);
         }
-        connect(colorSignalMapper, SIGNAL(mapped(QWidget*)), this, SLOT(pickColor(QWidget*)));
+        connect(colorSignalMapper, &QSignalMapper::mappedObject, this, [this](QObject *o) { pickColor(qobject_cast<QWidget *>(o)); });
 
         //! Fonts
         fontsSignalMapper = new QSignalMapper(this);
@@ -1719,7 +1757,7 @@ void MainWindow::openSettings()
             connect(fontCheckBoxes[i], SIGNAL(clicked()), fontsSignalMapper, SLOT(map()));
             fontsSignalMapper->setMapping(fontCheckBoxes[i], fontCheckBoxes[i]);
         }
-        connect(fontsSignalMapper, SIGNAL(mapped(QWidget*)), this, SLOT(changeHighlightingFont(QWidget*)));
+        connect(fontsSignalMapper, &QSignalMapper::mappedObject, this, [this](QObject *o) { changeHighlightingFont(qobject_cast<QWidget *>(o)); });
 
         connect(settingsUi.currentLineCheckBox, SIGNAL(stateChanged(int)), this, SLOT(changeHighlightingLineMode(int)));
 
@@ -1814,11 +1852,13 @@ void MainWindow::initColorButtons(bool dark, bool ignoreSettings) {
 }
 
 void MainWindow::changeColorButtonsLight() {
-    initColorButtons(false, true);
+    Theme::select(settings, "light");
+    initColorButtons(false, false);
 }
 
 void MainWindow::changeColorButtonsDark() {
-    initColorButtons(true, true);
+    Theme::select(settings, "dark");
+    initColorButtons(true, false);
 }
 
 void MainWindow::initAssemblerSettings(bool firstOpening)
@@ -2070,9 +2110,11 @@ void MainWindow::recreateHighlighter()
         Tab *currentTab = (Tab *) tabs->currentWidget();
         highlighter->setDocument(currentTab->getCodeDocument());
     }
-    delete settingsHighlighter;
-    settingsHighlighter = new Highlighter(assembler);
-    settingsHighlighter->setDocument(settingsStartTextEditor->document());
+    if (settingsStartTextEditor) {
+        delete settingsHighlighter;
+        settingsHighlighter = new Highlighter(assembler);
+        settingsHighlighter->setDocument(settingsStartTextEditor->document());
+    }
 }
 
 void MainWindow::saveSettings()
@@ -2115,6 +2157,7 @@ void MainWindow::pickColor(QWidget *button, bool init, bool ignoreSettings)
     name = name.toLower();
     QColor color = (ignoreSettings) ? colorsMap[name] : settings.value(name, colorsMap[name]).value<QColor>();
     if (!init) {
+        settings.setValue("appearance/mode", "custom");
         QColor newColor = QColorDialog::getColor(settings.value(name, colorsMap[name]).value<QColor>());
         if (newColor.isValid()) {
             color = newColor;
@@ -2137,6 +2180,7 @@ void MainWindow::pickColor(QWidget *button, bool init, bool ignoreSettings)
     int r, g, b;
     color.getRgb(&r, &g, &b);
     colorButton->setStyleSheet(QString("background-color: rgb(%1, %2, %3)").arg(r).arg(g).arg(b));
+    if (!init) Theme::apply(settings);
 }
 
 void MainWindow::changeHighlightingFont(QWidget *box, bool init)
@@ -2258,9 +2302,9 @@ void MainWindow::openHelp()
         helpFile.setFileName(":help/helpENG.html");
     }
 
-    helpFile.open(QFile::ReadOnly);
+    if (!helpFile.open(QFile::ReadOnly)) return;
     QTextStream helpText(&helpFile);
-    helpText.setCodec("utf-8");
+
     help->setHtml(helpText.readAll());
     helpFile.close();
     help->setWindowState(Qt::WindowMaximized);

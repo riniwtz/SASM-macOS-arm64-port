@@ -42,7 +42,7 @@
 #define FASM_H
 
 #include <QProcess>
-#include <QLinkedList>
+#include <QList>
 #include "gccbasedassembler.h"
 
 /**
@@ -66,8 +66,8 @@ public:
     void fillHighligherRules(QVector<Assembler::HighlightingRule> &highlightingRules,
                              QList<QTextCharFormat *> &formats,
                              bool &multiLineComments,
-                             QRegExp &commentStartExpression,
-                             QRegExp &commentEndExpression);
+                             SasmRegExp &commentStartExpression,
+                             SasmRegExp &commentEndExpression);
     QString getStartText();
     void putDebugString(CodeEditor *code);
     QString getAssemblerOptions();

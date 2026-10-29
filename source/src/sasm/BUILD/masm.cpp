@@ -39,6 +39,7 @@
 ****************************************************************************/
 
 #include "masm.h"
+#include <QRegularExpression>
 
 /**
  * @file masm.cpp
@@ -73,9 +74,9 @@ QString MASM::getLinkerPath()
 quint64 MASM::getMainOffset(QFile &lst, QString entryLabel)
 {
     QTextStream lstStream(&lst);
-    QRegExp mainLabel(" [0-9a-fA-F]{8,16}.*" + entryLabel + ":.*");
-    QRegExp empty1("\t\t\t      C.*");
-    QRegExp empty2(" *;.*");
+    SasmRegExp mainLabel(" [0-9a-fA-F]{8,16}.*" + entryLabel + ":.*");
+    SasmRegExp empty1("\t\t\t      C.*");
+    SasmRegExp empty2(" *;.*");
     while (!lstStream.atEnd()) {
         QString line = lstStream.readLine();
         if (empty1.exactMatch(line))
@@ -100,16 +101,16 @@ void MASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
     QList<QPair<quint64, QString> > instrList;
     bool inTextSection = false;
     //! Use word boundaries to prevent matching substrings of labels
-    QRegExp sectionTextRegExp("\\.code\\b");
+    SasmRegExp sectionTextRegExp("\\.code\\b");
     sectionTextRegExp.setCaseSensitivity(Qt::CaseInsensitive);
-    QRegExp sectionDataRegExp("\\.(data|fardata|const)\\b");
+    SasmRegExp sectionDataRegExp("\\.(data|fardata|const)\\b");
     sectionDataRegExp.setCaseSensitivity(Qt::CaseInsensitive);
-    QRegExp empty1("\t\t\t      C.*");
-    QRegExp empty2(" *;.*");
-    QRegExp stringWithCode(" [0-9a-fA-F]{8,16} +[0-9a-fA-F]{1,16}.*");
-    QRegExp stringWithAddress(" [0-9a-fA-F]{8,16}.*");
-    QRegExp macroBegin("[\t0-9a-fA-FRE ]+1\t.*");
-    QRegExp macro("[\t0-9a-fA-FRE ]+ +[1-9]\t.*");
+    SasmRegExp empty1("\t\t\t      C.*");
+    SasmRegExp empty2(" *;.*");
+    SasmRegExp stringWithCode(" [0-9a-fA-F]{8,16} +[0-9a-fA-F]{1,16}.*");
+    SasmRegExp stringWithAddress(" [0-9a-fA-F]{8,16}.*");
+    SasmRegExp macroBegin("[\t0-9a-fA-FRE ]+1\t.*");
+    SasmRegExp macro("[\t0-9a-fA-FRE ]+ +[1-9]\t.*");
     QString mayBeMacro, line, macroInstruction;
     bool inMacro = false;
     while (!lstStream.atEnd()) {
@@ -118,9 +119,9 @@ void MASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
             continue;
         if (empty2.exactMatch(line))
             continue;
-        if (line.indexOf(sectionTextRegExp) != -1) {
+        if (sectionTextRegExp.indexIn(line) != -1) {
             inTextSection = true;
-        } else if (line.indexOf(sectionDataRegExp) != -1) {
+        } else if (sectionDataRegExp.indexIn(line) != -1) {
             inTextSection = false;
         }
         if (inTextSection) {
@@ -139,7 +140,7 @@ void MASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
                 macroInstruction.remove(0, k);
                 if (macroInstruction[0] == '=')
                     continue;
-                macroInstruction.remove(QRegExp("^[0-9a-fA-F]{8,16}[ \t]+")); //if label
+                macroInstruction.remove(QRegularExpression("^[0-9a-fA-F]{8,16}[ \t]+")); //if label
                 while (!stringWithAddress.exactMatch(line) && !lstStream.atEnd())
                     line = lstStream.readLine();
                 lineArr = line.toLocal8Bit();
@@ -160,7 +161,7 @@ void MASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
                 while (k < macroInstruction.length() && macroInstruction[k].isSpace())
                     k++;
                 macroInstruction.remove(0, k);
-                macroInstruction.remove(QRegExp("^[0-9a-fA-F]{8,16}[ \t]+")); //if label
+                macroInstruction.remove(QRegularExpression("^[0-9a-fA-F]{8,16}[ \t]+")); //if label
                 while (!stringWithAddress.exactMatch(line) && !lstStream.atEnd())
                     line = lstStream.readLine();
                 lineArr = line.toLocal8Bit();
@@ -200,7 +201,7 @@ void MASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
             //! Check if instruction
             if (!stringWithCode.exactMatch(line) || macro.exactMatch(line) || sscanf(s, "%llx", &a) != 1)
                 continue;
-            int index = line.indexOf(QRegExp("[RE\t]\t"));
+            int index = SasmRegExp("[RE\t]\t").indexIn(line);
             if (index == -1)
                 continue;
             line = line.mid(index + 2);
@@ -216,7 +217,7 @@ void MASM::parseLstFile(QFile &lst, QVector<Assembler::LineNum> &lines, quint64 
     lst.close();
 
     QFile programFile(Common::pathInTemp("program.asm"));
-    programFile.open(QFile::ReadOnly);
+    if (!programFile.open(QFile::ReadOnly)) return;
     QTextStream programStream(&programFile);
     QList<QPair<quint64, QString> > programList;
     int numInCode = 0;
@@ -276,8 +277,8 @@ QString MASM::getLinkerOptions()
 void MASM::fillHighligherRules(QVector<Assembler::HighlightingRule> &highlightingRules,
                                QList<QTextCharFormat *> &formats,
                                bool &multiLineComments,
-                               QRegExp &commentStartExpression,
-                               QRegExp &commentEndExpression)
+                               SasmRegExp &commentStartExpression,
+                               SasmRegExp &commentEndExpression)
 {
     typedef Assembler::HighlightingRule HighlightingRule;
     QTextCharFormat &keywordFormat = *formats[0];
@@ -395,23 +396,23 @@ void MASM::fillHighligherRules(QVector<Assembler::HighlightingRule> &highlightin
                         "\\bPREFETCH\\b" << "\\bPREFETCHL\\b" << "\\bPREFETCHW\\b" << "\\bCLFLUSH\\b" <<
                         "\\bSYSENTER\\b" << "\\bSYSEXIT\\b" << "\\bSYSCALL\\b" << "\\bSYSRET\\b";
     foreach (const QString &pattern, keywordPatterns) {
-        rule.pattern = QRegExp(pattern);
+        rule.pattern = SasmRegExp(pattern);
         rule.pattern.setCaseSensitivity(Qt::CaseInsensitive);
         rule.format = keywordFormat;
         highlightingRules.append(rule);
     }
 
     //! Labels
-    rule.pattern = QRegExp("\\S+:");
+    rule.pattern = SasmRegExp("\\S+:");
     rule.format = labelFormat;
     highlightingRules.append(rule);
 
     //! Memory
     rule.format = memoryFormat;
     QStringList memoryPatterns;
-    rule.pattern = QRegExp("\\[");
+    rule.pattern = SasmRegExp("\\[");
     highlightingRules.append(rule);
-    rule.pattern = QRegExp("\\]");
+    rule.pattern = SasmRegExp("\\]");
     highlightingRules.append(rule);
     memoryPatterns << "\\bddq\\b" <<
                       "\\bdb\\b" << "\\bdw\\b" << "\\bdd\\b" <<
@@ -429,22 +430,22 @@ void MASM::fillHighligherRules(QVector<Assembler::HighlightingRule> &highlightin
                       "\\bDEFAULT\\b" <<
                       "\\bABS\\b" << "\\bREL\\b";
     foreach (const QString &pattern, memoryPatterns) {
-        rule.pattern = QRegExp(pattern);
+        rule.pattern = SasmRegExp(pattern);
         rule.pattern.setCaseSensitivity(Qt::CaseInsensitive);
         highlightingRules.append(rule);
     }
 
     //! Numbers
     rule.format = numberFormat;
-    rule.pattern = QRegExp("\\b[\\-\\+]?\\d+[bod]?\\b");
+    rule.pattern = SasmRegExp("\\b[\\-\\+]?\\d+[bod]?\\b");
     highlightingRules.append(rule);
-    rule.pattern = QRegExp("\\b0[bo]\\d+\\b");
-    highlightingRules.append(rule);
-    //! Hexadecimal notation
-    rule.pattern = QRegExp("\\b[0-9A-Fa-f]+h\\b");
+    rule.pattern = SasmRegExp("\\b0[bo]\\d+\\b");
     highlightingRules.append(rule);
     //! Hexadecimal notation
-    rule.pattern = QRegExp("\\b0[xh][0-9A-Fa-f]+\\b");
+    rule.pattern = SasmRegExp("\\b[0-9A-Fa-f]+h\\b");
+    highlightingRules.append(rule);
+    //! Hexadecimal notation
+    rule.pattern = SasmRegExp("\\b0[xh][0-9A-Fa-f]+\\b");
     highlightingRules.append(rule);
 
     //registers
@@ -473,20 +474,20 @@ void MASM::fillHighligherRules(QVector<Assembler::HighlightingRule> &highlightin
                         "\\br14b\\b" << "\\br15\\b" << "\\br15d\\b" <<
                         "\\br15w\\b" << "\\br15b\\b";
     foreach (const QString &pattern, registerPatterns) {
-        rule.pattern = QRegExp(pattern);
+        rule.pattern = SasmRegExp(pattern);
         rule.pattern.setCaseSensitivity(Qt::CaseInsensitive);
         rule.format = registerFormat;
         highlightingRules.append(rule);
     }
 
     //! .labels and numbers with point
-    rule.pattern = QRegExp("\\.[^\\s:]+[^:]");
+    rule.pattern = SasmRegExp("\\.[^\\s:]+[^:]");
     rule.format = labelWithDotFormat;
     highlightingRules.append(rule);
-    rule.pattern = QRegExp("\\.[^\\s:]+:");
+    rule.pattern = SasmRegExp("\\.[^\\s:]+:");
     rule.format = labelFormat;
     highlightingRules.append(rule);
-    rule.pattern = QRegExp("\\b[\\-\\+]?\\d+\\.\\d+\\b");
+    rule.pattern = SasmRegExp("\\b[\\-\\+]?\\d+\\.\\d+\\b");
     rule.format = numberFormat;
     highlightingRules.append(rule);
 
@@ -519,27 +520,27 @@ void MASM::fillHighligherRules(QVector<Assembler::HighlightingRule> &highlightin
                       "\\bTITLE\\b" << "\\bTYPEDEF\\b" << "\\bUNION\\b" <<
                       "\\bWHILE\\b";
     foreach (const QString &pattern, systemPatterns) {
-        rule.pattern = QRegExp(pattern);
+        rule.pattern = SasmRegExp(pattern);
         rule.pattern.setCaseSensitivity(Qt::CaseInsensitive);
         highlightingRules.append(rule);
     }
 
     //quotations
-    rule.pattern = QRegExp("\".*\"");
+    rule.pattern = SasmRegExp("\".*\"");
     rule.format = quotationFormat;
     rule.pattern.setMinimal(true);
     highlightingRules.append(rule);
 
-    rule.pattern = QRegExp("'.*'");
+    rule.pattern = SasmRegExp("'.*'");
     rule.pattern.setMinimal(true);
     highlightingRules.append(rule);
 
     //comments
-    rule.pattern = QRegExp(";[^\n]*");
+    rule.pattern = SasmRegExp(";[^\n]*");
     rule.isComment = true;
     rule.format = commentFormat;
     highlightingRules.append(rule);
     multiLineComments = false;
-    commentStartExpression = QRegExp();
-    commentEndExpression = QRegExp();
+    commentStartExpression = SasmRegExp();
+    commentEndExpression = SasmRegExp();
 }

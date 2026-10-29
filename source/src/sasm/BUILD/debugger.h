@@ -136,7 +136,7 @@ private:
     QString exitMessage;
 
     //! Message on exit which shows when "continue" command used
-    QRegExp cExitMessage;
+    SasmRegExp cExitMessage;
 
     //! Path to executable
     QString exePath;
