@@ -47,11 +47,34 @@
 #include <QtSingleApplication>
 #include <QInputDialog>
 #include <QPalette>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include "theme.h"
 #include "updater.h"
 
 #ifdef Q_OS_MACOS
 #include <QFileOpenEvent>
+#include <mach-o/dyld.h>
+
+// Some Qt 6 builds do not resolve the qt.conf in Contents/Resources when
+// launched from Finder. Add the bundled plugins before QApplication looks up
+// the Cocoa platform plugin, so the app works without a developer Qt install.
+static void configureBundledQtPlugins()
+{
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    if (!size)
+        return;
+    QByteArray executablePath(static_cast<qsizetype>(size), '\0');
+    if (_NSGetExecutablePath(executablePath.data(), &size) != 0)
+        return;
+    QDir executableDir(QFileInfo(QString::fromLocal8Bit(executablePath.constData())).absolutePath());
+    const QString bundledPlugins = QDir::cleanPath(executableDir.filePath("../PlugIns"));
+    if (QFileInfo::exists(bundledPlugins + "/platforms/libqcocoa.dylib"))
+        QCoreApplication::addLibraryPath(bundledPlugins);
+}
+
 
 class MacApplication : public QtSingleApplication
 {
@@ -93,6 +116,7 @@ int main(int argc, char *argv[])
         QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
     #endif
     #ifdef Q_OS_MACOS
+        configureBundledQtPlugins();
         MacApplication a(argc, argv);
     #else
         QtSingleApplication a(argc, argv);
