@@ -19,7 +19,7 @@ under the GNU General Public License v3.0 or later.
   <p align="center">
     An unofficial, reproducible macOS Apple Silicon port of SASM 3.16.0.
     <br />
-    Built with Qt 5, qmake, macdeployqt, Mach-O tooling, and macOS code signing.
+    Built with Qt 6, qmake, macdeployqt, Mach-O tooling, and macOS code signing.
     <br />
     <br />
     <a href="https://github.com/Dman95/SASM"><strong>View upstream SASM »</strong></a>
@@ -83,7 +83,7 @@ The goal is not to turn SASM into a separate product, but to make the upstream s
 ### What this port adds
 
 - Native Apple Silicon (`arm64`) SASM build
-- Qt 5 / qmake macOS build workflow
+- Qt 6 / qmake macOS build workflow
 - Proper macOS `.app` bundle generation
 - Proper macOS `.icns` application icon
 - Fix for the upstream Windows `RC_FILE = icon.rc` configuration affecting macOS bundle metadata
@@ -104,7 +104,7 @@ This port has been tested with:
 - **SASM:** 3.16.0
 - **Architecture:** Apple Silicon ARM64
 - **macOS:** 27.0 (Apple Silicon)
-- **Qt:** Qt 5.15.19
+- **Qt:** Qt 6.12.0
 - **Build system:** qmake + make
 - **Assembler:** NASM 3.02
 - **Intel execution:** Rosetta 2
@@ -135,7 +135,11 @@ SASM-macOS-arm64-port/
 ├── scripts/
 │   ├── build.sh
 │   ├── deploy.sh
-│   └── package.sh
+│   ├── package.sh
+│   ├── test.sh
+│   ├── test-debugger.py
+│   ├── test-updater.py
+│   └── test-packaged-app.py
 │
 ├── source/
 │   └── src/
@@ -143,17 +147,17 @@ SASM-macOS-arm64-port/
 │           └── BUILD/
 │               ├── SASM.pro
 │               ├── ...
-│               └── build-macos/       # generated, gitignored
+│               └── build-macos-qt6/       # generated, gitignored
 │                   └── sasm.app
 │
 ├── upstream/
 │   └── sasm_3.16.0-1.tar.gz
 │
 └── dist/                               # generated, gitignored
-    └── SASM-3.16.0-macOS-arm64.zip
+    └── SASM-3.17.0-macos.1-macOS-arm64.zip
 ```
 
-The `build-macos/` and `dist/` directories contain generated output and should not be committed to Git.
+The `build-macos-qt6/` and `dist/` directories contain generated output and should not be committed to Git.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -162,7 +166,7 @@ The `build-macos/` and `dist/` directories contain generated output and should n
 ## Built With
 
 - **SASM 3.16.0**
-- **Qt 5**
+- **Qt 6.8 or newer**
 - **qmake**
 - **GNU Make**
 - **Apple Clang**
@@ -179,7 +183,7 @@ The `build-macos/` and `dist/` directories contain generated output and should n
 
 If you only want to use SASM, download the latest prebuilt application:
 
-**[Download SASM 3.16.0 for macOS ARM64](https://github.com/riniwtz/SASM-macOS-arm64-port/releases/latest/download/SASM-3.16.0-macOS-arm64.zip)**
+**[Download the latest published SASM release](https://github.com/riniwtz/SASM-macOS-arm64-port/releases/latest)**
 
 1. Download the ZIP file.
 2. Double-click it to extract `sasm.app`.
@@ -226,16 +230,16 @@ Install Apple's Command Line Tools:
 xcode-select --install
 ```
 
-Install Qt 5 and NASM with Homebrew:
+Install Qt 6 and NASM with Homebrew:
 
 ```sh
-brew install qt@5 nasm
+brew install qtbase nasm
 ```
 
-Verify the Qt 5 qmake binary:
+Verify the Qt 6 qmake binary:
 
 ```sh
-"$(brew --prefix qt@5)/bin/qmake" -v
+"$(brew --prefix qtbase)/bin/qmake" -v
 ```
 
 Verify NASM:
@@ -274,14 +278,14 @@ Build SASM:
 The generated application should be located at:
 
 ```text
-source/src/sasm/BUILD/build-macos/sasm.app
+source/src/sasm/BUILD/build-macos-qt6/sasm.app
 ```
 
 The build script:
 
 1. Copies the canonical macOS icon from `assets/sasm.icns`
 2. Creates a separate, incremental macOS build directory
-3. Runs Qt 5 `qmake`
+3. Runs Qt 6 `qmake`
 4. Compiles SASM with `make`
 
 The build output is intentionally kept separate from the preserved upstream source files.
@@ -342,7 +346,7 @@ Create the distributable ZIP archive:
 Output:
 
 ```text
-dist/SASM-3.16.0-macOS-arm64.zip
+dist/SASM-3.17.0-macos.1-macOS-arm64.zip
 ```
 
 The packaging script uses macOS `ditto` to preserve application bundle metadata:
@@ -354,7 +358,7 @@ ditto \
     --sequesterRsrc \
     --keepParent \
     sasm.app \
-    SASM-3.16.0-macOS-arm64.zip
+    SASM-3.17.0-macos.1-macOS-arm64.zip
 ```
 
 The ZIP archive is intended to be attached to a GitHub Release rather than committed directly into the repository.
@@ -416,7 +420,7 @@ CFBundleIconFile = sasm.icns
 Qt libraries are embedded using:
 
 ```sh
-"$(brew --prefix qt@5)/bin/macdeployqt" sasm.app
+"$(brew --prefix qtbase)/bin/macdeployqt" sasm.app
 ```
 
 This allows the application to use the required Qt frameworks from inside its own `.app` bundle instead of relying on a Qt installation at runtime.
@@ -594,7 +598,7 @@ source breakpoints, instruction stepping, registers, memory, and input/output.
 Source paths are matched to the debug information so macOS symlinks such as
 `/var` and `/private/var` do not prevent breakpoints from resolving.
 
-To use a non-Homebrew Qt 5.15 installation, set `QMAKE=/path/to/qmake` for the
+To use a non-Homebrew Qt 6 installation, set `QMAKE=/path/to/qmake` for the
 build/test scripts and `QT_BIN=/path/to/qt/bin` for deployment.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -603,37 +607,70 @@ build/test scripts and `QT_BIN=/path/to/qt/bin` for deployment.
 
 ## Releases
 
-Release artifacts are generated from the reproducible scripts:
+The current port version is `3.17.0`, release tag `v3.17.0-macos.1`.
+Set `SASM_VERSION` and `SASM_RELEASE_TAG` in `versions.env` before each release.
+Use `vMAJOR.MINOR.PATCH-macos.REVISION`; increment the revision for another build
+of the same version. The build embeds these values in the application and its
+bundle metadata. Never reuse a published release tag.
 
 ```sh
+./scripts/test.sh
+python3 scripts/test-updater.py
+python3 scripts/test-debugger.py --intel --nasm
 ./scripts/build.sh
 ./scripts/deploy.sh
 ./scripts/package.sh
 ```
 
-This produces:
-
-```text
-dist/SASM-3.16.0-macOS-arm64.zip
-```
-
-Create a release tag:
+The archive is `dist/SASM-3.17.0-macos.1-macOS-arm64.zip`. Publish it as an asset
+of a public, non-draft, non-prerelease GitHub Release on
+`riniwtz/SASM-macOS-arm64-port`, and mark the release as **Latest**. GitHub supplies
+the asset's SHA-256 digest through its releases API; SASM will only offer packages
+with that digest and the exact release-specific filename generated by the script.
 
 ```sh
-git tag -a v3.16.0-macos.2 \
-    -m "SASM 3.16.0 macOS ARM64 release"
-
-git push origin v3.16.0-macos.2
+source versions.env
+git tag -a "$SASM_RELEASE_TAG" -m "SASM $SASM_RELEASE_TAG"
+git push origin "$SASM_RELEASE_TAG"
+gh release create "$SASM_RELEASE_TAG" \
+    "dist/SASM-${SASM_RELEASE_TAG#v}-macOS-arm64.zip" \
+    --title "SASM $SASM_RELEASE_TAG" --generate-notes --latest
 ```
 
-Create the GitHub Release using GitHub CLI:
+### Themes
 
-```sh
-gh release create v3.16.0-macos.2 \
-    dist/SASM-3.16.0-macOS-arm64.zip \
-    --title "SASM 3.16.0 macOS ARM64 Port" \
-    --notes "Unofficial macOS ARM64 port of SASM 3.16.0."
-```
+Use **Settings → Appearance → System, Light, Dark, or Custom editor colors**.
+System follows macOS appearance changes while the app is open. Theme changes apply
+immediately to open editors, syntax highlighting, line numbers, menus, dialogs,
+and build output. Existing custom editor colors are preserved during migration
+and can be restored with the Custom option.
+
+### Automatic updates
+
+SASM checks GitHub in the background at startup and then daily. **Updates → Check
+for Updates** checks immediately; **Check Automatically** disables or enables the
+scheduled checks. You can skip a release, postpone it, or download and choose
+**Install and Relaunch**. Drafts, prereleases, older versions, and incomplete
+packages are ignored. Network failures during background checks stay quiet.
+
+The updater checks the download size and SHA-256, validates archive paths and
+symlinks, verifies the app's identity, release version, architecture, minimum macOS
+version, and code signature, and asks you to save open files before replacement.
+It only updates a writable local `.app` bundle, never a disk image or translocated
+app. Python 3 (provided by Command Line Tools) is required for installation.
+The previous app remains beside the updated app as `sasm.app.previous-*`; remove
+it after confirming the update works. Failures are recorded in
+`~/Library/Logs/SASM/update.log` and displayed by the installer. A failed rename
+or relaunch restores the old app.
+
+The current local Homebrew dependencies require **macOS 27.0 or later**.
+Deployment inspects every bundled library and records the highest required macOS
+version in Info.plist; builds made with older-compatible Qt dependencies can
+support earlier macOS versions (the source deployment target is 14.4). Build, deploy,
+and test scripts use explicit Qt paths and do not change global Homebrew links.
+`QT_PREFIX` may select another Qt installation with the same directory layout.
+This repository keeps the original upstream source version at 3.16.0; 3.17.0 is
+the version of this port. No release is published by the build scripts.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -647,7 +684,7 @@ The current port includes:
 
 - [x] Native Apple Silicon build
 - [x] Valid macOS `.app` bundle
-- [x] Qt 5 deployment with `macdeployqt`
+- [x] Qt 6 deployment with `macdeployqt`
 - [x] Native `.icns` application icon
 - [x] Correct macOS bundle icon metadata
 - [x] Reproducible build script
