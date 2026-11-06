@@ -357,6 +357,26 @@ void CodeEditor::keyPressEvent(QKeyEvent *e)
     QString curString = textCursor().block().text();
     int indentWidth = -1;
     switch (e->key()) {
+#ifdef Q_OS_MACOS
+    case (Qt::Key_Backspace) :
+        if (e->modifiers() == Qt::ControlModifier && !isReadOnly()) {
+            QTextCursor cursor = textCursor();
+            QTextBlock block = cursor.block();
+            int start = block.position();
+            int end = start + block.text().length();
+            if (block.next().isValid())
+                end = block.next().position();
+            else if (start > 0)
+                --start;
+            cursor.setPosition(start);
+            cursor.setPosition(end, QTextCursor::KeepAnchor);
+            cursor.removeSelectedText();
+            setTextCursor(cursor);
+        } else {
+            QPlainTextEdit::keyPressEvent(e);
+        }
+        break;
+#endif
     case (Qt::Key_Tab) :
         if (! (e->modifiers() & Qt::ShiftModifier))
             putTab();
