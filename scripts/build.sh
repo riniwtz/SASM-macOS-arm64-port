@@ -18,10 +18,13 @@ mkdir -p "$BUILD_DIR"
 # qmake's Info.plist rule has no prerequisites, so remove the generated copy to
 # ensure bundle metadata always reflects the current Info.plist template.
 rm -f "$BUILD_DIR/sasm.app/Contents/Info.plist"
+# Re-detect the SDK after macOS or Command Line Tools updates.
+rm -f "$BUILD_DIR/.qmake.stash"
 
 cd "$BUILD_DIR"
 
 "$QMAKE" "${QMAKE_ARGS[@]}" ../SASM.pro
+python3 "$ROOT_DIR/scripts/generate-compile-commands.py"
 
 make -j"${JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
 

@@ -2,6 +2,7 @@
 .DS_Store
 
 # Our generated macOS build
+compile_commands.json
 source/src/sasm/BUILD/build-macos/
 source/src/sasm/BUILD/build-macos-tests/
 source/src/sasm/BUILD/build-macos-qt6/

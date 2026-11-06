@@ -53,6 +53,7 @@ under the GNU General Public License v3.0 or later.
       </ul>
     </li>
     <li><a href="#build">Build</a></li>
+    <li><a href="#develop-in-zed">Develop in Zed</a></li>
     <li><a href="#deploy">Deploy</a></li>
     <li><a href="#package">Package</a></li>
     <li><a href="#macos-specific-changes">macOS-Specific Changes</a></li>
@@ -309,6 +310,37 @@ The build script:
 4. Compiles SASM with `make`
 
 The build output is intentionally kept separate from the preserved upstream source files.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+---
+
+## Develop in Zed
+
+Open the **repository root** in Zed (`zed .`), then run `./scripts/build.sh`
+once in the terminal. The build generates an ignored `compile_commands.json`
+containing the real Qt 6 compiler flags, framework paths, and include directories
+for Clangd. Zed uses `/usr/bin/clangd` via `.zed/settings.json`. This resolves
+false missing-header diagnostics such as `'QPainter' file not found` without
+hardcoding Qt include paths in the editor configuration. The build refreshes
+the compilation database whenever qmake is rerun.
+
+Press **Command + Shift + R** in Zed to select one of the project tasks in
+`.zed/tasks.json`:
+
+- **SASM: Build (Qt 6)** builds the app and refreshes editor diagnostics.
+- **SASM: Build and Run** builds and launches the macOS app.
+- **SASM: Run** launches the existing app without rebuilding it.
+- **SASM: Test** runs the project's Qt integration tests.
+
+If Zed still shows previous diagnostics after the first build, use **Command +
+Shift + P → `editor: restart language server`** while a C++ file is open.
+To check the compiler configuration outside Zed, run
+`clangd --check=source/src/sasm/BUILD/mainwindow.cpp` from the repository root.
+
+The prerequisites are the same as for a normal build: Apple Command Line Tools
+and Homebrew `qtbase` and `nasm`. To select another Qt installation, set
+`QT_PREFIX` or `QMAKE` when running the build script.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

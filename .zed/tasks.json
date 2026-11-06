@@ -1,0 +1,26 @@
+[
+  {
+    "label": "SASM: Build (Qt 6)",
+    "command": "./scripts/build.sh",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "save": "all"
+  },
+  {
+    "label": "SASM: Build and Run",
+    "command": "./scripts/build.sh && open -n source/src/sasm/BUILD/build-macos-qt6/sasm.app",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "save": "all"
+  },
+  {
+    "label": "SASM: Run",
+    "command": "open",
+    "args": ["-n", "$ZED_WORKTREE_ROOT/source/src/sasm/BUILD/build-macos-qt6/sasm.app"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  },
+  {
+    "label": "SASM: Test",
+    "command": "./scripts/test.sh",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "save": "all"
+  }
+]
